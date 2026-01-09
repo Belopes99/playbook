@@ -9,9 +9,14 @@ PROJECT = "playbook-database-477918"
 DATASET = "brasileirao_serie_a"
 SCHEDULE_PREFIX = "schedule_brasileirao_serie_a"
 
+from google.oauth2 import service_account
 
-def get_bq_client() -> bigquery.Client:
-    return bigquery.Client(project=PROJECT)
+def getbqclient() -> bigquery.Client:
+    credentials = service_account.Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"]
+    )
+    return bigquery.Client(credentials=credentials, project=credentials.project_id)
+
 
 
 def fq_table(prefix: str, year: int) -> str:
@@ -66,3 +71,4 @@ def render_sidebar_globals() -> Dict:
     st.session_state["teams"] = teams
 
     return globals_
+
