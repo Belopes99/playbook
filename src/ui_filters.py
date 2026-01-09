@@ -1,22 +1,24 @@
 from __future__ import annotations
 
 from typing import List, Dict, Tuple
+
+import pandas as pd
 import streamlit as st
 from google.cloud import bigquery
-import pandas as pd
+from google.oauth2 import service_account
 
 PROJECT = "playbook-database-477918"
 DATASET = "brasileirao_serie_a"
 SCHEDULE_PREFIX = "schedule_brasileirao_serie_a"
 
-from google.oauth2 import service_account
 
-def getbqclient() -> bigquery.Client:
+@st.cache_resource
+def get_bq_client() -> bigquery.Client:
     credentials = service_account.Credentials.from_service_account_info(
         st.secrets["gcp_service_account"]
     )
-    return bigquery.Client(credentials=credentials, project=credentials.project_id)
-
+    # Pode usar credentials.project_id, mas fixar PROJECT ajuda a evitar surpresas
+    return bigquery.Client(credentials=credentials, project=PROJECT)
 
 
 def fq_table(prefix: str, year: int) -> str:
@@ -58,12 +60,16 @@ def load_teams_for_years(years: Tuple[int, ...]) -> List[str]:
 def render_sidebar_globals() -> Dict:
     st.sidebar.header("Filtros globais")
 
-    years = st.sidebar.multiselect("Temporada(s)", list(range(2015, 2026)), default=[2025])
+    years = st.sidebar.multiselect(
+        "Temporada(s)", list(range(2015, 2026)), default=[2025]
+    )
     years = _years_from_ui(years)
     years_t = tuple(years)
 
     teams_all = load_teams_for_years(years_t)
-    teams = st.sidebar.multiselect("Time(s)", teams_all, default=teams_all[:1] if teams_all else [])
+    teams = st.sidebar.multiselect(
+        "Time(s)", teams_all, default=teams_all[:1] if teams_all else []
+    )
 
     globals_ = {"years": years, "teams": teams}
 
@@ -71,4 +77,3 @@ def render_sidebar_globals() -> Dict:
     st.session_state["teams"] = teams
 
     return globals_
-
