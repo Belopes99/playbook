@@ -211,7 +211,7 @@ def plot_events_plotly(
                 mode="lines",
                 name=f"{name} (Trajetória)",
                 line=dict(color=color, width=1.5),
-                opacity=0.6,
+                opacity=opacity, # Use function arg
                 showlegend=False,
                 hoverinfo="skip"
             ))
@@ -230,7 +230,7 @@ def plot_events_plotly(
                     angle=head_angles,
                     standoff=0
                 ),
-                opacity=0.8,
+                opacity=opacity, # Use function arg
                 showlegend=False,
                 hoverinfo="skip"
             ))
@@ -242,7 +242,7 @@ def plot_events_plotly(
         df_o = df[~mask]
         
         if not df_o.empty:
-            add_trace(df_o, "Outros", def_color, opacity=0.3, size=6, symbol="circle") # Force circle for background
+            add_trace(df_o, "Outros", def_color, opacity=0.1, size=6, symbol="circle") # Increased transparency (0.3 -> 0.1)
         if not df_h.empty:
             add_trace(df_h, highlight_qualifier, hl_color, opacity=1.0, size=12, symbol="star")
             
