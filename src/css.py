@@ -57,5 +57,32 @@ def load_css():
             border: 1px solid #30363d;
             border-radius: 6px;
         }
+
+        /* Navigation Card Styling */
+        .nav-card {
+            background-color: #21262d;
+            border: 1px solid #30363d;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            text-decoration: none;
+            color: #c9d1d9;
+            transition: transform 0.2s, background-color 0.2s;
+            display: block;
+        }
+        .nav-card:hover {
+            transform: translateY(-2px);
+            background-color: #30363d;
+            border-color: #8b949e;
+            text-decoration: none;
+        }
+        .nav-card h3 {
+            margin-top: 0;
+            color: #58a6ff;
+        }
+        .nav-card p {
+            color: #8b949e;
+            font-size: 0.9em;
+        }
         </style>
     """, unsafe_allow_html=True)
