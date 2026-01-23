@@ -6,22 +6,25 @@ import streamlit as st
 from google.cloud import bigquery
 
 
+DEFAULT_PROJECT_ID = "betterbet-448216"
+
 @st.cache_resource(ttl=3600)
 def get_bq_client(project: Optional[str] = None) -> bigquery.Client:
     """
     Cria cliente do BigQuery.
-    Usa 'gcp_service_account' dos secrets do Streamlit se disponível.
-    Caso contrário, tenta credenciais padrão (ambiente).
     """
+    # Force default if None provided
+    target_project = project or DEFAULT_PROJECT_ID
+    
     # 1. Tenta pegar do dicionário 'gcp_service_account' (Estrutura Recomendada)
     if "gcp_service_account" in st.secrets:
-        # st.write("✅ Encontrou [gcp_service_account]") # Debug
         from google.oauth2 import service_account
-        info = dict(st.secrets["gcp_service_account"]) # Cast to dict safety
+        info = dict(st.secrets["gcp_service_account"])
         credentials = service_account.Credentials.from_service_account_info(info)
-        # Prioritize passed project, then secret project
-        project = project or info.get("project_id")
-        return bigquery.Client(credentials=credentials, project=project)
+        
+        # Override project from secret if needed, but prefer target_project if explicit
+        # actually, credential project is less important than client project usually
+        return bigquery.Client(credentials=credentials, project=target_project)
 
     # 2. Tenta pegar da raiz (Caso o usuário tenha colado apenas o conteúdo sem o header)
     elif "private_key" in st.secrets and "project_id" in st.secrets:

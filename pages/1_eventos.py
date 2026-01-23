@@ -19,7 +19,7 @@ load_css()
 # CONFIG BQ
 # =========================================
 
-PROJECT = "betterbet-467621"
+PROJECT = "betterbet-448216"
 DATASET = "betterdata"
 
 EVENTS_PREFIX = "eventos_brasileirao_serie_a"

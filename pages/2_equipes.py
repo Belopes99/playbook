@@ -29,27 +29,33 @@ except Exception as e:
     st.stop()
 
 # --- 2. FILTERS & AGGREGATION ---
-with st.sidebar:
-    st.header("Configuração de Análise")
-    
+# --- 2. FILTERS & AGGREGATION ---
+# Remove Sidebar and put on top
+st.divider()
+
+col_f1, col_f2 = st.columns(2)
+
+with col_f1:
     # Mode: Season vs General
     mode = st.radio(
         "Modo de Comparação:",
         ["Por Temporada (Ex: 2024 vs 2025)", "Histórico Geral (Agregado)"],
-        index=0
+        index=0,
+        horizontal=True
     )
-    
-    # Competition (Mocked for now as we only have 1 dataset ideally)
-    # If we had 'competition' col, we would filter here.
-    
-    if mode.startswith("Por Temporada"):
-        # Group by Team AND Season
-        groupby_cols = ["team", "season"]
-        df["team_display"] = df["team"] + " (" + df["season"].astype(str) + ")"
-    else:
-        # Group by Team only
-        groupby_cols = ["team"]
-        df["team_display"] = df["team"]
+
+with col_f2:
+    # Placeholder for future competition filter
+    st.write("") 
+
+if mode.startswith("Por Temporada"):
+    # Group by Team AND Season
+    groupby_cols = ["team", "season"]
+    df["team_display"] = df["team"] + " (" + df["season"].astype(str) + ")"
+else:
+    # Group by Team only
+    groupby_cols = ["team"]
+    df["team_display"] = df["team"]
 
 # Calculate Aggregates
 # Sums
