@@ -8,7 +8,6 @@ from src.queries import get_match_stats_query
 
 st.set_page_config(page_title="Ranking de Equipes", page_icon="📊", layout="wide")
 load_css()
-globals_ = render_sidebar_globals()
 
 st.title("📊 Comparativo de Equipes")
 

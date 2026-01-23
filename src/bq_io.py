@@ -17,8 +17,9 @@ def get_bq_client(project: Optional[str] = None) -> bigquery.Client:
     if "gcp_service_account" in st.secrets:
         # st.write("✅ Encontrou [gcp_service_account]") # Debug
         from google.oauth2 import service_account
-        info = st.secrets["gcp_service_account"]
+        info = dict(st.secrets["gcp_service_account"]) # Cast to dict safety
         credentials = service_account.Credentials.from_service_account_info(info)
+        # Prioritize passed project, then secret project
         project = project or info.get("project_id")
         return bigquery.Client(credentials=credentials, project=project)
 

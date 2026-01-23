@@ -15,9 +15,6 @@ st.set_page_config(
 # Load CSS Styles
 load_css()
 
-# Render Global Sidebar (Project Config)
-globals_ = render_sidebar_globals()
-
 # --- HERO SECTION ---
 st.markdown("""
 <div style="text-align: center; margin-bottom: 40px;">

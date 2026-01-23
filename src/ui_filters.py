@@ -51,18 +51,7 @@ def load_teams_for_years(years: Tuple[int, ...]) -> List[str]:
 
 
 def render_sidebar_globals() -> Dict:
-    st.sidebar.header("Filtros globais")
-
-    years = st.sidebar.multiselect("Temporada(s)", list(range(2015, 2026)), default=[2025])
-    years = _years_from_ui(years)
-    years_t = tuple(years)
-
-    teams_all = load_teams_for_years(years_t)
-    teams = st.sidebar.multiselect("Time(s)", teams_all, default=teams_all[:1] if teams_all else [])
-
-    globals_ = {"years": years, "teams": teams}
-
-    st.session_state["years"] = years
-    st.session_state["teams"] = teams
-
-    return globals_
+    # DEPRECATED: Filters moved to individual pages
+    return {}
+    # st.sidebar.header("Filtros globais")
+    # ... code removed ...
