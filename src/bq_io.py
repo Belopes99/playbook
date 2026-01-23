@@ -9,21 +9,24 @@ from google.cloud import bigquery
 DEFAULT_PROJECT_ID = "betterbet-448216"
 
 @st.cache_resource(ttl=3600)
-def get_bq_client(project: Optional[str] = None) -> bigquery.Client:
+def get_bq_client(project: Optional[str] = None, _cache_version: int = 2) -> bigquery.Client:
     """
     Cria cliente do BigQuery.
     """
     # Force default if None provided
     target_project = project or DEFAULT_PROJECT_ID
     
-    # 1. Tenta pegar do dicionário 'gcp_service_account' (Estrutura Recomendada)
+    # 1. Tenta pegar do dicionário 'gcp_service_account'
     if "gcp_service_account" in st.secrets:
         from google.oauth2 import service_account
         info = dict(st.secrets["gcp_service_account"])
         credentials = service_account.Credentials.from_service_account_info(info)
         
-        # Override project from secret if needed, but prefer target_project if explicit
-        # actually, credential project is less important than client project usually
+        # FIX: Ensure we use target_project
+        if not target_project:
+             # Fallback to secret if target_project somehow still empty (unlikely due to DEFAULT)
+             target_project = info.get("project_id")
+
         return bigquery.Client(credentials=credentials, project=target_project)
 
     # 2. Tenta pegar da raiz (Caso o usuário tenha colado apenas o conteúdo sem o header)

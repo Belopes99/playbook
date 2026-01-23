@@ -78,14 +78,14 @@ def union_sql(prefix: str, years: Tuple[int, ...], select_clause: str) -> str:
 
 
 def run_query(sql: str, params: Optional[list] = None) -> pd.DataFrame:
-    client = get_bq_client()
+    client = get_bq_client(project=PROJECT)
     cfg = bigquery.QueryJobConfig(query_parameters=params or [])
     return client.query(sql, job_config=cfg).to_dataframe()
 
 
 @st.cache_data(ttl=3600)
 def detect_match_id_col(prefix: str, year: int) -> str:
-    client = get_bq_client()
+    client = get_bq_client(project=PROJECT)
     table_id = f"{PROJECT}.{DATASET}.{prefix}_{int(year)}"
     schema = client.get_table(table_id).schema
     cols = [f.name for f in schema]
