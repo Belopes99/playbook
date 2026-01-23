@@ -172,10 +172,25 @@ def plot_events_plotly(
                     dy = ey - sy
                     dx = ex - sx
                     import math
-                    angle = math.degrees(math.atan2(dy, dx))
+                    angle_math = math.degrees(math.atan2(dy, dx))
                     head_x.append(ex)
                     head_y.append(ey)
-                    head_angles.append(angle - 90) # Adjust if needed
+                    
+                    # Plotly Marker Angle:
+                    # 0 = Up (12 o'clock)
+                    # Increases CLOCKWISE
+                    # math.atan2:
+                    # 0 = Right (3 o'clock)
+                    # Increases COUNTER-CLOCKWISE
+                    #
+                    # Mapping:
+                    # Math 0 (Right)   -> Plotly 90
+                    # Math 90 (Up)     -> Plotly 0
+                    # Math 180 (Left)  -> Plotly 270 (-90)
+                    # Math -90 (Down)  -> Plotly 180
+                    #
+                    # Formula: 90 - MathAngle
+                    head_angles.append(90 - angle_math)
 
         # 1. Main Scatter Traces (Markers - Start Point)
         traces.append(go.Scatter(
@@ -209,7 +224,7 @@ def plot_events_plotly(
                 mode="markers",
                 name=f"{name} (Pontas)",
                 marker=dict(
-                    symbol="arrow-bar-up", # Looks like a clean triangle head
+                    symbol="triangle-up", # Using standard triangle
                     size=10,
                     color=color,
                     angle=head_angles,
