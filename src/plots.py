@@ -116,7 +116,7 @@ def plot_events_plotly(
     # Helper to map event types to shapes
     def get_event_symbol(event_type):
         etype = str(event_type).lower()
-        if "pass" in etype: return "triangle-up"
+        if "pass" in etype: return "circle" if draw_arrows else "triangle-up"
         if "shot" in etype or "goal" in etype: return "circle"
         if "duel" in etype or "tackle" in etype or "interception" in etype or "foul" in etype: return "square"
         if "save" in etype: return "diamond-tall"
