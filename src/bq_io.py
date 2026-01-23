@@ -13,19 +13,33 @@ def get_bq_client(project: Optional[str] = None) -> bigquery.Client:
     Usa 'gcp_service_account' dos secrets do Streamlit se disponível.
     Caso contrário, tenta credenciais padrão (ambiente).
     """
+    # 1. Tenta pegar do dicionário 'gcp_service_account' (Estrutura Recomendada)
     if "gcp_service_account" in st.secrets:
         from google.oauth2 import service_account
-        
-        credentials = service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"]
-        )
-        # Usa o project definido no secret se nenhum for passado
-        project = project or st.secrets["gcp_service_account"].get("project_id")
-        
+        info = st.secrets["gcp_service_account"]
+        credentials = service_account.Credentials.from_service_account_info(info)
+        project = project or info.get("project_id")
         return bigquery.Client(credentials=credentials, project=project)
 
-    # Fallback para comportamento antigo
-    return bigquery.Client(project=project) if project else bigquery.Client()
+    # 2. Tenta pegar da raiz (Caso o usuário tenha colado apenas o conteúdo sem o header)
+    elif "private_key" in st.secrets and "project_id" in st.secrets:
+        from google.oauth2 import service_account
+        # Converter st.secrets (que pode ser um proxy) para dict
+        info = dict(st.secrets)
+        credentials = service_account.Credentials.from_service_account_info(info)
+        project = project or info.get("project_id")
+        return bigquery.Client(credentials=credentials, project=project)
+
+    # 3. Fallback: Tenta credenciais do ambiente (local com gcloud auth login)
+    try:
+        return bigquery.Client(project=project) if project else bigquery.Client()
+    except Exception as e:
+        st.error(
+            "Erro de Autenticação do Google Cloud. "
+            "Não foi possível encontrar as credenciais no 'st.secrets' nem no ambiente. "
+            "Verifique se você configurou o Secret 'gcp_service_account' no Streamlit Cloud."
+        )
+        raise e
 
 
 def load_table(
