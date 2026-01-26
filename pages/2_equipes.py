@@ -13,7 +13,7 @@ st.title("📊 Comparativo de Equipes")
 
 # --- 1. DATA LOADING ---
 PROJECT_ID = "betterbet-467621"
-DATASET_ID = "events_data"
+DATASET_ID = "betterdata"
 
 @st.cache_data(ttl=3600)
 def load_data():

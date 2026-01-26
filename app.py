@@ -32,7 +32,7 @@ PROJECT_ID = "prodigy-scouting-platform" # Hardcoded fallback or get from secret
 # Actually get_bq_client handles auth, but we need project_id for string queries.
 # Let's verify how we usually get it. In 1_eventos.py we hardcoded. Ideally we unify.
 PROJECT_ID = "betterbet-467621" # FIXED based on secrets 
-DATASET_ID = "events_data"
+DATASET_ID = "betterdata"
 
 client = get_bq_client(project=PROJECT_ID)
 
