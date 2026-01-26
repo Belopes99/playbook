@@ -43,7 +43,7 @@ with col_filter_2:
 with col_filter_4:
     metric_selection = st.selectbox(
         "Métrica:",
-        ["Gols", "Assistências (N/A)", "Chutes", "Passes Certos", "Desarmes", "Interceptações", "Recuperações", "Faltas"],
+        ["Gols", "Assistências", "Passes Decisivos", "Chutes", "Passes Certos", "Desarmes", "Interceptações", "Recuperações", "Faltas"],
         index=0
     )
 
@@ -149,7 +149,8 @@ if subject == "Equipes":
         "total_shots": "sum", "shots_on_target": "sum",
         "tackles": "sum", "interceptions": "sum", 
         "recoveries": "sum", "clearances": "sum",
-        "saves": "sum", "fouls": "sum"
+        "saves": "sum", "fouls": "sum",
+        "assists": "sum", "key_passes": "sum"
     }
     
     # Filter known columns only (safe check)
@@ -180,7 +181,8 @@ elif subject == "Jogadores":
         "goals": "sum", "shots": "sum", 
         "successful_passes": "sum", "total_passes": "sum",
         "tackles": "sum", "interceptions": "sum",
-        "recoveries": "sum", "clearances": "sum", "fouls": "sum"
+        "recoveries": "sum", "clearances": "sum", "fouls": "sum",
+        "assists": "sum", "key_passes": "sum"
     }
     
     # Filter known columns only (safe check)
@@ -209,6 +211,8 @@ elif subject == "Jogadores":
 # Map selection to column
 metric_map = {
     "Gols": {"col": "goals_for", "label": "Gols"},
+    "Assistências": {"col": "assists", "label": "Assistências"},
+    "Passes Decisivos": {"col": "key_passes", "label": "Passes Decisivos"},
     "Chutes": {"col": "total_shots", "label": "Chutes"},
     "Passes Certos": {"col": "successful_passes", "label": "Passes Certos"},
     "Desarmes": {"col": "tackles", "label": "Desarmes"},

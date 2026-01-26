@@ -206,7 +206,11 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
             COUNTIF(type = 'Ball Recovery') as recoveries,
             COUNTIF(type = 'Clearance') as clearances,
             COUNTIF(type = 'Save') as saves,
-            COUNTIF(type = 'Foul') as fouls
+            COUNTIF(type = 'Foul') as fouls,
+            
+            -- Qualifiers (String Parsing)
+            COUNTIF(qualifiers LIKE '%"displayName": "Assist"%') as assists,
+            COUNTIF(qualifiers LIKE '%"displayName": "KeyPass"%') as key_passes
         FROM all_events
         GROUP BY 1, 2
     )
@@ -228,7 +232,9 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
         IFNULL(e.recoveries, 0) as recoveries,
         IFNULL(e.clearances, 0) as clearances,
         IFNULL(e.saves, 0) as saves,
-        IFNULL(e.fouls, 0) as fouls
+        IFNULL(e.fouls, 0) as fouls,
+        IFNULL(e.assists, 0) as assists,
+        IFNULL(e.key_passes, 0) as key_passes
     FROM match_teams t
     LEFT JOIN event_stats e ON t.game_id = e.match_id AND t.team = e.team
     """
@@ -327,7 +333,10 @@ def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
             COUNTIF(type = 'Interception') as interceptions,
             COUNTIF(type = 'Ball Recovery') as recoveries,
             COUNTIF(type = 'Clearance') as clearances,
-            COUNTIF(type = 'Foul') as fouls
+            COUNTIF(type = 'Foul') as fouls,
+            
+            COUNTIF(qualifiers LIKE '%"displayName": "Assist"%') as assists,
+            COUNTIF(qualifiers LIKE '%"displayName": "KeyPass"%') as key_passes
         FROM all_events
         WHERE player IS NOT NULL
         GROUP BY 1, 2, 3
@@ -347,7 +356,9 @@ def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
         p.interceptions,
         p.recoveries,
         p.clearances,
-        p.fouls
+        p.fouls,
+        p.assists,
+        p.key_passes
     FROM player_stats p
     JOIN match_dates m ON p.game_id = m.game_id
     -- No GROUP BY here, we return raw match rows
