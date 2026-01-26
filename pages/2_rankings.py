@@ -127,8 +127,8 @@ if subject == "Equipes":
     matches = df_filtered.groupby(groupby_cols)["match_id"].nunique().reset_index(name="matches")
     df_agg = pd.merge(df_agg, matches, on=groupby_cols)
 
-    # Display Name Reconstruction
-    if "season" in groupby_cols:
+    # Display Name Reconstruction (Robust)
+    if "season" in df_agg.columns:
         df_agg["display_name"] = df_agg["team"] + " (" + df_agg["season"].astype(str) + ")"
     else:
          df_agg["display_name"] = df_agg["team"]
@@ -151,8 +151,8 @@ elif subject == "Jogadores":
     matches = df_filtered.groupby(groupby_cols)["game_id"].nunique().reset_index(name="matches")
     df_agg = pd.merge(df_agg, matches, on=groupby_cols)
 
-    # Display Name Reconstruction
-    if "season" in groupby_cols:
+    # Display Name Reconstruction (Robust)
+    if "season" in df_agg.columns:
         df_agg["display_name"] = df_agg["player"] + " (" + df_agg["team"] + " " + df_agg["season"].astype(str) + ")"
     else:
         df_agg["display_name"] = df_agg["player"]
