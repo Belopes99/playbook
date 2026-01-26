@@ -74,12 +74,13 @@ def _build_schedule_union(project_id: str, dataset_id: str) -> str:
         subqueries.append(f"""
             SELECT 
                 game_id, 
+                {year} as season, -- Hardcoded from table suffix
                 {ts_col} as match_date, 
                 home_team, 
                 away_team, 
                 home_score, 
                 away_score, 
-                CAST(status as STRING) as status -- Normalize status to STRING just in case
+                CAST(status as STRING) as status 
             FROM `{project_id}.{dataset_id}.schedule_brasileirao_serie_a_{year}`
         """)
     return " UNION ALL ".join(subqueries)
@@ -90,60 +91,8 @@ def _build_events_union(project_id: str, dataset_id: str) -> str:
     Builds UNION ALL for Events tables, properly Aliasing/Casting.
     Required: game_id, team, player, type, outcome_type, is_shot, x, y, end_x, end_y
     """
-    subqueries = []
-    for year in YEARS_TO_QUERY:
-        # Events usually stable? check debug.
-        # 2017: ... 2025: ...
-        # Assuming stable for now EXCEPT game_id vs match_id we fixed earlier.
-        # But wait, did older tables have 'game_id'? Or 'match_id'?
-        # In my game_id fix I assumed they all had game_id.
-        # If older tables have match_id, I need to alias.
-        
-        # Let's check 2017 events schema in thought process? 
-        # I'll rely on the fact that I should cast everything generic.
-        
-        # NOTE: is_shot might not exist in older tables!
-        # If 'is_shot' is missing, I need `FALSE` or calculated column.
-        
-        subqueries.append(f"""
-            SELECT 
-                game_id, 
-                team, 
-                player, 
-                type, 
-                outcome_type, 
-                CAST(x as FLOAT64) as x, 
-                CAST(y as FLOAT64) as y, 
-                CAST(end_x as FLOAT64) as end_x, 
-                CAST(end_y as FLOAT64) as end_y,
-                -- Verify is_shot exists? If not, assume False (handle inside query? No can't select if not exists)
-                -- For now, `SELECT *` was working for events until I messed up types in schedule?
-                -- The error was "Column 41". Schedule has many cols. Events usually fewer?
-                -- Actually events has many too.
-                -- Let's stick to SELECT * for events for now, but CAST schedule.
-                -- Use `SELECT *` for events is risky if columns change order.
-                -- Better to specific select.
-                
-                type IN ('Missed Shots', 'Saved Shot', 'Goal', 'Shot on Post') as is_shot_calculated -- Fallback?
-                -- Revert to * for Events IF it didn't crash. Use explicit for Schedule which crashed.
-                -- User said: "Column 41 in UNION ALL".
-            FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_{year}`
-        """)
-        
-    # Reverting to * for events logic inside the main functions to keep logic simple unless it breaks.
-    # Actually, I should use the helper to be safe.
-    # But `is_shot` is critical.
-    # Let's keep `SELECT *` for events in strict `_build_union` logic? 
-    # No, I should use specific columns.
-    
-    # Lets assume `game_id`, `team`, `player`, `type`, `outcome_type`, `x`, `y` exist.
-    # `is_shot` is the risky one.
-    
-    cols = "game_id, team, player, type, outcome_type, x, y, end_x, end_y, is_shot"
-    # If is_shot missing, this query fails.
-    # I'll stick to `SELECT *` for EVENTS and fixing SCHEDULE first.
-    
-    return " UNION ALL ".join([f"SELECT * FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_{year}`" for year in YEARS_TO_QUERY])
+    # events also need season if we ever query them directly for season stats
+    return " UNION ALL ".join([f"SELECT *, {year} as season FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_{year}`" for year in YEARS_TO_QUERY])
 
 
 def get_total_matches_query(project_id: str, dataset_id: str) -> str:
@@ -208,6 +157,7 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
         SELECT 
             game_id,
             match_date,
+            season,
             home_team,
             away_team,
             home_score,
@@ -220,17 +170,18 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
         SELECT 
             game_id,
             match_date,
+            season,
             home_team as team,
             home_score as goals_for,
             away_score as goals_against,
             'Mandante' as side
         FROM match_metadata
-        
         UNION ALL
         
         SELECT 
             game_id,
             match_date,
+            season,
             away_team as team,
             away_score as goals_for,
             home_score as goals_against,
@@ -254,7 +205,7 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
     SELECT
         t.game_id as match_id,
         t.match_date, -- Needed for Date Range Filter
-        EXTRACT(YEAR FROM t.match_date) as season,
+        t.season,     -- From source table
         t.team,
         t.goals_for,
         t.goals_against,
@@ -342,7 +293,7 @@ def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
     ),
     
     match_dates AS (
-        SELECT game_id, match_date as start_time 
+        SELECT game_id, match_date as start_time, season
         FROM all_schedule
     ),
     
@@ -364,7 +315,7 @@ def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
         p.player,
         p.team,
         m.start_time as match_date, -- Granular date for filtering
-        EXTRACT(YEAR FROM m.start_time) as season,
+        m.season,
         p.game_id,
         p.goals,
         p.shots,
