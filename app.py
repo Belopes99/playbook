@@ -81,10 +81,10 @@ with nav_col1:
 
 with nav_col2:
     st.markdown("""
-    <a href="/equipes" target="_self" class="nav-card">
+    <a href="/rankings" target="_self" class="nav-card">
         <div style="font-size: 3rem; margin-bottom: 10px;">📊</div>
-        <h3>Comparativo de Equipes</h3>
-        <p>Rankings, scatter plots e tabelas de performance (Geral vs Temporada).</p>
+        <h3>Rankings Gerais</h3>
+        <p>Comparativo de Equipes e Jogadores (Gols, Chutes, Passes).</p>
     </a>
     """, unsafe_allow_html=True)
 

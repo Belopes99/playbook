@@ -166,3 +166,43 @@ def get_player_events_query(project_id: str, dataset_id: str, player: str) -> st
     FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_2025`
     WHERE player = '{player}'
     """
+
+
+def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
+    """
+    Retorna estatísticas de jogadores AGRUPADAS por Temporada (via Join com Schedule).
+    Permite ranking 'Por Temporada' ou 'Agregado' (realizado no Pandas).
+    """
+    return f"""
+    WITH match_dates AS (
+        SELECT game_id, start_time 
+        FROM `{project_id}.{dataset_id}.schedule_brasileirao_serie_a_2025`
+    ),
+    
+    player_stats AS (
+        SELECT
+            game_id,
+            player,
+            team,
+            COUNTIF(is_shot = true) as shots,
+            COUNTIF(type = 'Goal') as goals,
+            COUNTIF(type = 'Pass' AND outcome_type = 'Successful') as successful_passes,
+            COUNTIF(type = 'Pass') as total_passes
+        FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_2025`
+        WHERE player IS NOT NULL
+        GROUP BY 1, 2, 3
+    )
+    
+    SELECT
+        p.player,
+        p.team,
+        EXTRACT(YEAR FROM m.start_time) as season,
+        COUNT(DISTINCT p.game_id) as matches,
+        SUM(p.goals) as goals,
+        SUM(p.shots) as shots,
+        SUM(p.successful_passes) as successful_passes,
+        SUM(p.total_passes) as total_passes
+    FROM player_stats p
+    JOIN match_dates m ON p.game_id = m.game_id
+    GROUP BY 1, 2, 3
+    """
