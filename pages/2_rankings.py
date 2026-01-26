@@ -72,6 +72,9 @@ if subject == "Equipes":
             ["goals_for", "goals_against", "total_passes", "successful_passes", "total_shots", "shots_on_target"]
         ].sum().reset_index()
         
+        # Restore display_name
+        df_agg["display_name"] = df_agg["team"] + " (" + df_agg["season"].astype(str) + ")"
+        
         # Match counts
         matches = df_raw.groupby(groupby_cols)["match_id"].nunique().reset_index(name="matches")
         df_agg = pd.merge(df_agg, matches, on=groupby_cols)
@@ -83,6 +86,9 @@ if subject == "Equipes":
         df_agg = df_raw.groupby(groupby_cols)[
             ["goals_for", "goals_against", "total_passes", "successful_passes", "total_shots", "shots_on_target"]
         ].sum().reset_index()
+        
+        # Restore display_name
+        df_agg["display_name"] = df_agg["team"]
         
         matches = df_raw.groupby(groupby_cols)["match_id"].nunique().reset_index(name="matches")
         df_agg = pd.merge(df_agg, matches, on=groupby_cols)
@@ -105,6 +111,9 @@ elif subject == "Jogadores":
             ["matches", "goals", "shots", "successful_passes", "total_passes"]
         ].sum().reset_index()
         
+        # Restore display_name
+        df_agg["display_name"] = df_agg["player"] + " (" + df_agg["team"] + " " + df_agg["season"].astype(str) + ")"
+        
     else: # Historico/Agregado
         # Ignore team? Or include "Last Team"?
         # Usually for player rankings, aggregating across teams in same league is fine.
@@ -114,6 +123,9 @@ elif subject == "Jogadores":
         df_agg = df_raw.groupby(groupby_cols)[
             ["matches", "goals", "shots", "successful_passes", "total_passes"]
         ].sum().reset_index()
+        
+        # Restore display_name
+        df_agg["display_name"] = df_agg["player"]
         
         # Determine "Team" for display (Latest or 'Multiple')
         # Simple approach: Join with list of teams
