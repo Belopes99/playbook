@@ -163,7 +163,7 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
             home_score,
             away_score
         FROM all_schedule
-        WHERE home_score IS NOT NULL 
+        -- Removed: WHERE home_score IS NOT NULL (To match diagnostic count of 418)
     ),
     
     match_teams AS (
@@ -172,8 +172,8 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
             match_date,
             season,
             home_team as team,
-            home_score as goals_for,
-            away_score as goals_against,
+            IFNULL(home_score, 0) as goals_for,
+            IFNULL(away_score, 0) as goals_against,
             'Mandante' as side
         FROM match_metadata
         UNION ALL
@@ -183,8 +183,8 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
             match_date,
             season,
             away_team as team,
-            away_score as goals_for,
-            home_score as goals_against,
+            IFNULL(away_score, 0) as goals_for,
+            IFNULL(home_score, 0) as goals_against,
             'Visitante' as side
         FROM match_metadata
     ),
