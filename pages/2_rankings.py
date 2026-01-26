@@ -142,9 +142,21 @@ if subject == "Equipes":
         groupby_cols = ["team"]
         df_filtered["base_name"] = df_filtered["team"]
         
-    df_agg = df_filtered.groupby(groupby_cols)[
-        ["goals_for", "goals_against", "total_passes", "successful_passes", "total_shots", "shots_on_target"]
-    ].sum().reset_index()
+    # Aggregation
+    agg_dict = {
+        "goals_for": "sum", "goals_against": "sum", 
+        "total_passes": "sum", "successful_passes": "sum", 
+        "total_shots": "sum", "shots_on_target": "sum",
+        "tackles": "sum", "interceptions": "sum", 
+        "recoveries": "sum", "clearances": "sum",
+        "saves": "sum", "fouls": "sum"
+    }
+    
+    # Filter known columns only (safe check)
+    valid_cols = [c for c in agg_dict.keys() if c in df_filtered.columns]
+    agg_dict_final = {k: agg_dict[k] for k in valid_cols}
+    
+    df_agg = df_filtered.groupby(groupby_cols).agg(agg_dict_final).reset_index()
         
     matches = df_filtered.groupby(groupby_cols)["match_id"].nunique().reset_index(name="matches")
     df_agg = pd.merge(df_agg, matches, on=groupby_cols)
@@ -158,16 +170,24 @@ if subject == "Equipes":
 
 elif subject == "Jogadores":
     # PLAYER LOGIC
-    # Raw cols: player, team, season, match_date, game_id, goals, shots, successful_passes, total_passes
     
     if aggregation_mode == "Por Temporada":
         groupby_cols = ["player", "team", "season"]
     else: 
         groupby_cols = ["player"]
 
-    df_agg = df_filtered.groupby(groupby_cols)[
-        ["goals", "shots", "successful_passes", "total_passes"]
-    ].sum().reset_index()
+    agg_dict = {
+        "goals": "sum", "shots": "sum", 
+        "successful_passes": "sum", "total_passes": "sum",
+        "tackles": "sum", "interceptions": "sum",
+        "recoveries": "sum", "clearances": "sum", "fouls": "sum"
+    }
+    
+    # Filter known columns only (safe check)
+    valid_cols = [c for c in agg_dict.keys() if c in df_filtered.columns]
+    agg_dict_final = {k: agg_dict[k] for k in valid_cols}
+
+    df_agg = df_filtered.groupby(groupby_cols).agg(agg_dict_final).reset_index()
     
     # Count matches: distinct game_id per group
     matches = df_filtered.groupby(groupby_cols)["game_id"].nunique().reset_index(name="matches")
@@ -179,36 +199,39 @@ elif subject == "Jogadores":
     else:
         df_agg["display_name"] = df_agg["player"]
         
-    # Alias for consistency with chart
-    df_agg["goals_for"] = df_agg["goals"] 
-    df_agg["total_shots"] = df_agg["shots"]
+    # Alias for consistency with team cols
+    if "goals" in df_agg.columns: df_agg["goals_for"] = df_agg["goals"] 
+    if "shots" in df_agg.columns: df_agg["total_shots"] = df_agg["shots"]
 
 
 # 4.3 Metrics Calculation (Per Match)
-# Basic Per Match (P90 proxy)
-df_agg["goals_p90"] = (df_agg["goals_for"] / df_agg["matches"]).fillna(0)
-df_agg["shots_p90"] = (df_agg["total_shots"] / df_agg["matches"]).fillna(0)
-# Pass Pct is always independent of totals vs p90
-df_agg["pass_pct"] = (df_agg["successful_passes"] / df_agg["total_passes"]).fillna(0) * 100
+# 4.3 Metrics Mapping
+# Map selection to column
+metric_map = {
+    "Gols": {"col": "goals_for", "label": "Gols"},
+    "Chutes": {"col": "total_shots", "label": "Chutes"},
+    "Passes Certos": {"col": "successful_passes", "label": "Passes Certos"},
+    "Desarmes": {"col": "tackles", "label": "Desarmes"},
+    "Interceptações": {"col": "interceptions", "label": "Interceptações"},
+    "Recuperações": {"col": "recoveries", "label": "Recuperações"},
+    "Faltas": {"col": "fouls", "label": "Faltas Cometidas"},
+}
 
-# 4.4 Limit Filter (Moved to Top)
-# Top N is defined in Step 2 for Layout reasons.
-pass
+sel_metric = metric_map.get(metric_selection, {"col": "goals_for", "label": "Gols"})
+base_col = sel_metric["col"]
+base_label = sel_metric["label"]
 
-
-# 4.5 Chart columns setup
-if normalization_mode == "Por Jogo (Média)":
-    metric_col = "goals_p90"
-    metric_label = "Gols por Jogo"
-    secondary_col = "shots_p90"
-    secondary_label = "Chutes por Jogo"
+# 4.4 Calc P90/Total
+if normalization_mode == "Por Jogo" or normalization_mode == "Por Jogo (Média)": # Handle label change
+    df_agg["display_metric"] = (df_agg[base_col] / df_agg["matches"]).fillna(0)
+    metric_label = f"{base_label} por Jogo"
     text_format = ".2f"
 else: # Totals
-    metric_col = "goals_for"
-    metric_label = "Total de Gols"
-    secondary_col = "total_shots"
-    secondary_label = "Total de Chutes"
+    df_agg["display_metric"] = df_agg[base_col]
+    metric_label = f"Total de {base_label}"
     text_format = ".0f"
+
+metric_col = "display_metric"
 
 
 # --- 5. VISUALIZATION ---
