@@ -324,6 +324,7 @@ def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
     FROM player_stats p
     JOIN match_dates m ON p.game_id = m.game_id
     -- No GROUP BY here, we return raw match rows
+    """
 
 
 def get_teams_match_count_query(project_id: str, dataset_id: str) -> str:
@@ -353,5 +354,4 @@ def get_teams_match_count_query(project_id: str, dataset_id: str) -> str:
     FROM matches_per_team
     GROUP BY 1, 2
     ORDER BY season DESC, total_games ASC
-    """
     """
