@@ -22,7 +22,7 @@ st.title("📊 Rankings Gerais")
 st.divider()
 
 # --- 2. MAIN FILTERS ---
-col_filter_1, col_filter_2, col_filter_3, col_filter_4 = st.columns(4)
+col_filter_1, col_filter_2, col_filter_3, col_filter_4, col_filter_5 = st.columns(5)
 
 with col_filter_1:
     subject = st.radio(
@@ -175,7 +175,16 @@ df_agg["shots_p90"] = (df_agg["total_shots"] / df_agg["matches"]).fillna(0)
 # Pass Pct is always independent of totals vs p90
 df_agg["pass_pct"] = (df_agg["successful_passes"] / df_agg["total_passes"]).fillna(0) * 100
 
-# 4.4 Chart columns setup
+# 4.4 Min Data Filter (User Request: "quantidade mínima que entra no ranking")
+min_games_default = 5 if subject == "Equipes" else 3
+
+with col_filter_5:
+    min_matches = st.number_input("Mínimo de Partidas:", 1, 38, min_games_default)
+
+df_agg = df_agg[df_agg["matches"] >= min_matches]
+
+
+# 4.5 Chart columns setup
 if normalization_mode == "Por Jogo (Média)":
     metric_col = "goals_p90"
     metric_label = "Gols por Jogo"
