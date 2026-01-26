@@ -21,7 +21,7 @@ st.title("📊 Rankings Gerais")
 # --- 1. CONFIGURATION & SIDEBAR ---
 st.divider()
 
-# --- 2. MAIN FILTERS ---
+# --- 2. CONFIGURATION & SIDEBAR ---
 col_filter_1, col_filter_2, col_filter_3, col_filter_4, col_filter_5 = st.columns(5)
 
 with col_filter_1:
@@ -39,19 +39,6 @@ with col_filter_2:
         index=0,
         horizontal=True
     )
-    
-with col_filter_3:
-    # Date Range Filter
-    # Default: Last 30 days? Or full range? 
-    # Let's verify data range first or use reasonable defaults.
-    today = datetime.now().date()
-    start_default = today - timedelta(days=365) # Last year default
-    
-    date_range = st.date_input(
-        "Período:",
-        value=(start_default, today),
-        format="DD/MM/YYYY"
-    )
 
 with col_filter_4:
     normalization_mode = st.radio(
@@ -60,6 +47,10 @@ with col_filter_4:
         index=0, # Default Totals
         horizontal=True
     )
+
+with col_filter_5:
+    top_n = st.number_input("Top N:", 1, 100, 10)
+
 
 # --- 3. DATA LOADING ---
 PROJECT_ID = "betterbet-467621"
@@ -94,15 +85,31 @@ except Exception as e:
     st.error(f"Erro ao carregar dados: {e}")
     st.stop()
 
-# --- 4. DATA PROCESSING (Filtering & Aggregation) ---
 
-# 4.1 Date Filter
+# --- 4. DATE FILTER WITH DYNAMIC DEFAULTS ---
+with col_filter_3:
+    # Determine min/max from data for default
+    if not df_raw.empty and "match_date" in df_raw.columns:
+        min_date = df_raw["match_date"].min()
+        max_date = df_raw["match_date"].max()
+    else:
+        # Fallback if empty
+        min_date = datetime.now().date() - timedelta(days=365)
+        max_date = datetime.now().date()
+        
+    date_range = st.date_input(
+        "Período:",
+        value=(min_date, max_date),
+        format="DD/MM/YYYY"
+    )
+
+# 4.1 Apply Date Filter
 if isinstance(date_range, tuple) and len(date_range) == 2:
     start_date, end_date = date_range
     mask = (df_raw["match_date"] >= start_date) & (df_raw["match_date"] <= end_date)
     df_filtered = df_raw[mask].copy()
 elif isinstance(date_range, tuple) and len(date_range) == 1:
-    # User selected only start date, treat as >= start
+    # User selected only start date
     start_date = date_range[0]
     mask = (df_raw["match_date"] >= start_date)
     df_filtered = df_raw[mask].copy()
@@ -111,7 +118,8 @@ else:
 
 if df_filtered.empty:
     st.warning("Nenhum dado encontrado para o período selecionado.")
-    st.stop()
+    # st.stop() # Removed stop to allow changing filters even if empty
+
 
 
 # 4.2 Aggregation Logic
@@ -175,13 +183,9 @@ df_agg["shots_p90"] = (df_agg["total_shots"] / df_agg["matches"]).fillna(0)
 # Pass Pct is always independent of totals vs p90
 df_agg["pass_pct"] = (df_agg["successful_passes"] / df_agg["total_passes"]).fillna(0) * 100
 
-# 4.4 Limit Filter (User Request: "limitar no top 10")
-with col_filter_5:
-    top_n = st.number_input("Top N:", 1, 100, 10)
-
-# We cannot filter by Top N yet because we need to sort first!
-# Sorting depends on the selected metric which is defined below.
-# So we defer the filtering to after sorting.
+# 4.4 Limit Filter (Moved to Top)
+# Top N is defined in Step 2 for Layout reasons.
+pass
 
 
 # 4.5 Chart columns setup
