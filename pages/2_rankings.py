@@ -224,10 +224,21 @@ with tab1:
             color="pass_pct", # Auxiliary color
             color_continuous_scale="Viridis",
             text=metric_col,
+            # Add raw data to tooltip
+            hover_data={
+                "matches": True,
+                "goals_for": True,
+                "total_shots": True,
+                "display_name": False, # Hide duplicate name
+                metric_col: ":.2f" if normalization_mode == "Por Jogo (Média)" else ":.0f"
+            },
             labels={
                 metric_col: metric_label,
                 "display_name": subject[:-1],
-                "pass_pct": "Precisão de Passe (%)"
+                "pass_pct": "Precisão de Passe (%)",
+                "matches": "Jogos Disputados",
+                "goals_for": "Total de Gols",
+                "total_shots": "Total de Chutes"
             }
         )
         
