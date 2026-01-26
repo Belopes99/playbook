@@ -41,15 +41,23 @@ with col_filter_2:
     )
 
 with col_filter_4:
-    normalization_mode = st.radio(
-        "Visualizar dados:",
-        ["Totais (Absolutos)", "Por Jogo (Média)"],
-        index=0, # Default Totals
-        horizontal=True
+    metric_selection = st.selectbox(
+        "Métrica:",
+        ["Gols", "Assistências (N/A)", "Chutes", "Passes Certos", "Desarmes", "Interceptações", "Recuperações", "Faltas"],
+        index=0
     )
+
 
 with col_filter_5:
     top_n = st.number_input("Top N:", 1, 100, 10)
+    
+    normalization_mode = st.radio(
+        "Visualizar:",
+        ["Total", "Por Jogo"],
+        index=0,
+        horizontal=True,
+        label_visibility="collapsed" 
+    )
 
 
 # --- 3. DATA LOADING ---
@@ -231,15 +239,16 @@ with tab1:
             # Add raw data to tooltip (Removing Shots/Passes as requested)
             hover_data={
                 "matches": True,
-                "goals_for": True,
+                base_col: True, # Show the raw total of selected metric
                 "display_name": False, # Hide duplicate name
-                metric_col: ":.2f" if normalization_mode == "Por Jogo (Média)" else ":.0f"
+                metric_col: ":.2f" if "Por Jogo" in normalization_mode else ":.0f"
             },
             labels={
                 metric_col: metric_label,
                 "display_name": subject[:-1],
                 "matches": "Jogos Disputados",
-                "goals_for": "Total de Gols"
+                base_col: base_label,
+                "goals_for": "Total de Gols" # Legacy fallback
             }
         )
         

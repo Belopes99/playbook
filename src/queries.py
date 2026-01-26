@@ -195,9 +195,18 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
             team,
             COUNTIF(type = 'Pass') as total_passes,
             COUNTIF(type = 'Pass' AND outcome_type = 'Successful') as successful_passes,
+            
             COUNTIF(is_shot = true) as total_shots,
             COUNTIF(type = 'Goal') as goals_from_events,
-            COUNTIF(type IN ('SavedShot', 'Goal')) as shots_on_target
+            COUNTIF(type IN ('SavedShot', 'Goal')) as shots_on_target,
+            
+            -- Defensive / Other
+            COUNTIF(type = 'Tackle') as tackles,
+            COUNTIF(type = 'Interception') as interceptions,
+            COUNTIF(type = 'Ball Recovery') as recoveries,
+            COUNTIF(type = 'Clearance') as clearances,
+            COUNTIF(type = 'Save') as saves,
+            COUNTIF(type = 'Foul') as fouls
         FROM all_events
         GROUP BY 1, 2
     )
@@ -212,7 +221,14 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
         IFNULL(e.total_passes, 0) as total_passes,
         IFNULL(e.successful_passes, 0) as successful_passes,
         IFNULL(e.total_shots, 0) as total_shots,
-        IFNULL(e.shots_on_target, 0) as shots_on_target
+        IFNULL(e.shots_on_target, 0) as shots_on_target,
+        
+        IFNULL(e.tackles, 0) as tackles,
+        IFNULL(e.interceptions, 0) as interceptions,
+        IFNULL(e.recoveries, 0) as recoveries,
+        IFNULL(e.clearances, 0) as clearances,
+        IFNULL(e.saves, 0) as saves,
+        IFNULL(e.fouls, 0) as fouls
     FROM match_teams t
     LEFT JOIN event_stats e ON t.game_id = e.match_id AND t.team = e.team
     """
@@ -305,7 +321,13 @@ def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
             COUNTIF(is_shot = true) as shots,
             COUNTIF(type = 'Goal') as goals,
             COUNTIF(type = 'Pass' AND outcome_type = 'Successful') as successful_passes,
-            COUNTIF(type = 'Pass') as total_passes
+            COUNTIF(type = 'Pass') as total_passes,
+            
+            COUNTIF(type = 'Tackle') as tackles,
+            COUNTIF(type = 'Interception') as interceptions,
+            COUNTIF(type = 'Ball Recovery') as recoveries,
+            COUNTIF(type = 'Clearance') as clearances,
+            COUNTIF(type = 'Foul') as fouls
         FROM all_events
         WHERE player IS NOT NULL
         GROUP BY 1, 2, 3
@@ -320,7 +342,12 @@ def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
         p.goals,
         p.shots,
         p.successful_passes,
-        p.total_passes
+        p.total_passes,
+        p.tackles,
+        p.interceptions,
+        p.recoveries,
+        p.clearances,
+        p.fouls
     FROM player_stats p
     JOIN match_dates m ON p.game_id = m.game_id
     -- No GROUP BY here, we return raw match rows
