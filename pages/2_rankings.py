@@ -175,13 +175,13 @@ df_agg["shots_p90"] = (df_agg["total_shots"] / df_agg["matches"]).fillna(0)
 # Pass Pct is always independent of totals vs p90
 df_agg["pass_pct"] = (df_agg["successful_passes"] / df_agg["total_passes"]).fillna(0) * 100
 
-# 4.4 Min Data Filter (User Request: "quantidade mínima que entra no ranking")
-min_games_default = 5 if subject == "Equipes" else 3
-
+# 4.4 Limit Filter (User Request: "limitar no top 10")
 with col_filter_5:
-    min_matches = st.number_input("Mínimo de Partidas:", 1, 38, min_games_default)
+    top_n = st.number_input("Top N:", 1, 100, 10)
 
-df_agg = df_agg[df_agg["matches"] >= min_matches]
+# We cannot filter by Top N yet because we need to sort first!
+# Sorting depends on the selected metric which is defined below.
+# So we defer the filtering to after sorting.
 
 
 # 4.5 Chart columns setup
@@ -201,42 +201,45 @@ else: # Totals
 
 # --- 5. VISUALIZATION ---
 
+# Sort and Limit Globally
+df_sorted = df_agg.sort_values(metric_col, ascending=False).head(top_n)
+
+# Tabs
 tab1, tab2 = st.tabs(["📊 Rankings (Gols)", "📋 Dados Detalhados"])
 
 with tab1:
     col_chart_meta, _ = st.columns([1, 3])
     with col_chart_meta:
-        st.caption(f"Exibindo **{metric_label}** para top itens.")
+        st.caption(f"Exibindo **{metric_label}** para top {top_n} itens.")
     
-    top_n = st.slider("Quantidade de itens:", 5, 50, 20)
-    
-    # Sort by the selected metric
-    df_chart = df_agg.sort_values(metric_col, ascending=False).head(top_n)
-    
-    fig = px.bar(
-        df_chart,
-        x=metric_col,
-        y="display_name",
-        orientation='h',
-        color="pass_pct", # Auxiliary color
-        color_continuous_scale="Viridis",
-        text=metric_col,
-        labels={
-            metric_col: metric_label,
-            "display_name": subject[:-1],
-            "pass_pct": "Precisão de Passe (%)"
-        }
-    )
-    
-    fig.update_layout(yaxis={'categoryorder':'total ascending'}, template="plotly_dark", height=600)
-    fig.update_traces(texttemplate='%{text:' + text_format + '}', textposition='outside')
-    
-    st.plotly_chart(fig, use_container_width=True)
+    # Check if empty
+    if df_sorted.empty:
+        st.warning("Sem dados para exibir.")
+    else:
+        fig = px.bar(
+            df_sorted,
+            x=metric_col,
+            y="display_name",
+            orientation='h',
+            color="pass_pct", # Auxiliary color
+            color_continuous_scale="Viridis",
+            text=metric_col,
+            labels={
+                metric_col: metric_label,
+                "display_name": subject[:-1],
+                "pass_pct": "Precisão de Passe (%)"
+            }
+        )
+        
+        fig.update_layout(yaxis={'categoryorder':'total ascending'}, template="plotly_dark", height=600)
+        fig.update_traces(texttemplate='%{text:' + text_format + '}', textposition='outside')
+        
+        st.plotly_chart(fig, use_container_width=True)
 
 
 with tab2:
     st.dataframe(
-        df_agg.sort_values("goals_for", ascending=False),
+        df_sorted,
         use_container_width=True,
         hide_index=True
     )
