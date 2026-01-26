@@ -8,7 +8,7 @@ def get_total_matches_query(project_id: str, dataset_id: str) -> str:
     # Por enquanto, vamos pegar apenas de 2025 ou fazer um UNION se tiver mais anos.
     # Para simplificar, vamos contar de 2025.
     return f"""
-        SELECT COUNT(DISTINCT match_id) as total
+        SELECT COUNT(DISTINCT game_id) as total
         FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_2025`
     """
 
@@ -27,7 +27,7 @@ def get_recent_matches_query(project_id: str, dataset_id: str, limit: int = 5) -
     """
     return f"""
         SELECT 
-            DISTINCT match_id,
+            DISTINCT game_id as match_id,
             match_date,
             home_team,
             away_team,
@@ -46,7 +46,7 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
     return f"""
     WITH match_teams AS (
         SELECT 
-            match_id,
+            game_id as match_id,
             match_date,
             home_team as team,
             home_score as goals_for,
@@ -58,7 +58,7 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
         UNION ALL
         
         SELECT 
-            match_id,
+            game_id as match_id,
             match_date,
             away_team as team,
             away_score as goals_for,
@@ -70,7 +70,7 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
     
     event_stats AS (
         SELECT
-            match_id,
+            game_id as match_id,
             team,
             COUNTIF(type = 'Pass') as total_passes,
             COUNTIF(type = 'Pass' AND outcome_type = 'Successful') as successful_passes,
@@ -145,7 +145,7 @@ def get_player_events_query(project_id: str, dataset_id: str, player: str) -> st
     """
     return f"""
     SELECT 
-        match_id,
+        game_id as match_id,
         team,
         player,
         type,
