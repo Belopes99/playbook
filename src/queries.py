@@ -9,7 +9,7 @@ def get_total_matches_query(project_id: str, dataset_id: str) -> str:
     # Para simplificar, vamos contar de 2025.
     return f"""
         SELECT COUNT(DISTINCT match_id) as total
-        FROM `{project_id}.{dataset_id}.events_bra_2025`
+        FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_2025`
     """
 
 def get_total_events_query(project_id: str, dataset_id: str) -> str:
@@ -18,7 +18,7 @@ def get_total_events_query(project_id: str, dataset_id: str) -> str:
     """
     return f"""
         SELECT COUNT(*) as total
-        FROM `{project_id}.{dataset_id}.events_bra_2025`
+        FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_2025`
     """
 
 def get_recent_matches_query(project_id: str, dataset_id: str, limit: int = 5) -> str:
@@ -33,7 +33,7 @@ def get_recent_matches_query(project_id: str, dataset_id: str, limit: int = 5) -
             away_team,
             home_score,
             away_score
-        FROM `{project_id}.{dataset_id}.events_bra_2025`
+        FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_2025`
         ORDER BY match_date DESC
         LIMIT {limit}
     """
@@ -52,7 +52,7 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
             home_score as goals_for,
             away_score as goals_against,
             'Mandante' as side
-        FROM `{project_id}.{dataset_id}.events_bra_2025`
+        FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_2025`
         GROUP BY 1,2,3,4,5
         
         UNION ALL
@@ -64,7 +64,7 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
             away_score as goals_for,
             home_score as goals_against,
             'Visitante' as side
-        FROM `{project_id}.{dataset_id}.events_bra_2025`
+        FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_2025`
         GROUP BY 1,2,3,4,5
     ),
     
@@ -77,7 +77,7 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
             COUNTIF(type IN ('Missed Shots', 'Saved Shot', 'Goal', 'Shot on Post')) as total_shots,
             COUNTIF(type = 'Goal') as goals_from_events, -- Check consistency with score
             COUNTIF(type IN ('Saved Shot', 'Goal', 'Shot on Post')) as shots_on_target
-        FROM `{project_id}.{dataset_id}.events_bra_2025`
+        FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_2025`
         GROUP BY 1, 2
     )
     
