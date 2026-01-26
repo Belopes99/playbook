@@ -6,7 +6,7 @@ import streamlit as st
 from google.cloud import bigquery
 
 
-DEFAULT_PROJECT_ID = "betterbet-448216"
+DEFAULT_PROJECT_ID = "betterbet-467621"
 
 @st.cache_resource(ttl=3600)
 def get_bq_client(project: Optional[str] = None, _cache_version: int = 2) -> bigquery.Client:

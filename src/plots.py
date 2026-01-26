@@ -337,3 +337,46 @@ def plot_events_plotly(
         fig.add_trace(t)
         
     return fig
+
+
+def plot_radar_chart(
+    player_name: str,
+    categories: list,
+    values: list,
+    max_values: Optional[list] = None
+) -> go.Figure:
+    """
+    Plots a radar chart for a single player.
+    """
+    fig = go.Figure()
+
+    # If max_values provided, normalize to 0-1 (or 0-100) or just plot raw?
+    # Simple approach: Plot raw, user sees axes.
+    # Aesthetically, closed shape.
+
+    fig.add_trace(go.Scatterpolar(
+        r=values,
+        theta=categories,
+        fill='toself',
+        name=player_name,
+        line_color='#00ff00',
+        fillcolor='rgba(0, 255, 0, 0.2)'
+    ))
+
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                showticklabels=True,
+                gridcolor='#30363d',
+                tickfont=dict(color='gray')
+            ),
+            bgcolor='rgba(0,0,0,0)'
+        ),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        showlegend=False,
+        margin=dict(l=40, r=40, t=40, b=40)
+    )
+
+    return fig

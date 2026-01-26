@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from src.ui_filters import render_sidebar_globals
+
 from src.css import load_css
 from src.bq_io import get_bq_client
 from src.queries import get_total_matches_query, get_total_events_query, get_recent_matches_query
@@ -31,7 +31,7 @@ st.markdown("""
 PROJECT_ID = "prodigy-scouting-platform" # Hardcoded fallback or get from secrets via bq_io logic? 
 # Actually get_bq_client handles auth, but we need project_id for string queries.
 # Let's verify how we usually get it. In 1_eventos.py we hardcoded. Ideally we unify.
-PROJECT_ID = "betterbet-448216" # FIXED based on user's known project id from previous context 
+PROJECT_ID = "betterbet-467621" # FIXED based on secrets 
 DATASET_ID = "events_data"
 
 client = get_bq_client(project=PROJECT_ID)
@@ -85,6 +85,15 @@ with nav_col2:
         <div style="font-size: 3rem; margin-bottom: 10px;">📊</div>
         <h3>Comparativo de Equipes</h3>
         <p>Rankings, scatter plots e tabelas de performance (Geral vs Temporada).</p>
+    </a>
+    """, unsafe_allow_html=True)
+
+with col3:
+    st.markdown("""
+    <a href="/jogadores" target="_self" class="nav-card">
+        <div style="font-size: 3rem; margin-bottom: 10px;">🏃</div>
+        <h3>Análise de Jogadores</h3>
+        <p>Radar charts, mapas de calor e métricas individuais detalhadas.</p>
     </a>
     """, unsafe_allow_html=True)
 

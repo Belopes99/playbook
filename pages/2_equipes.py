@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from src.ui_filters import render_sidebar_globals
+
 from src.css import load_css
 from src.bq_io import get_bq_client
 from src.queries import get_match_stats_query
@@ -12,7 +12,7 @@ load_css()
 st.title("📊 Comparativo de Equipes")
 
 # --- 1. DATA LOADING ---
-PROJECT_ID = "betterbet-448216"
+PROJECT_ID = "betterbet-467621"
 DATASET_ID = "events_data"
 
 @st.cache_data(ttl=3600)

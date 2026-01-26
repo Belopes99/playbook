@@ -94,3 +94,69 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
     FROM match_teams t
     LEFT JOIN event_stats e ON t.match_id = e.match_id AND t.team = e.team
     """
+
+
+def get_players_by_team_query(project_id: str, dataset_id: str, team: str) -> str:
+    """
+    Lista jogadores que atuaram pelo time.
+    """
+    return f"""
+    SELECT DISTINCT player
+    FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_2025`
+    WHERE team = '{team}' AND player IS NOT NULL
+    ORDER BY player
+    """
+
+
+def get_player_stats_query(project_id: str, dataset_id: str, year: int = 2025) -> str:
+    """
+    Retorna estatísticas AGREGADAS por jogador para radar charts.
+    Normaliza para 'por 90 minutos' se tiver essa info, ou retorna totais.
+    Como schema pode variar, focarei em contagens raw primeiro.
+    """
+    # NOTE: Assuming single dataset for now, ignoring 'year' param for table name as 2025 is hardcoded in function names for now.
+    # Ideally should be dynamic.
+    
+    return f"""
+    SELECT
+        player,
+        team,
+        COUNT(*) as total_actions,
+        COUNTIF(type = 'Pass') as total_passes,
+        COUNTIF(type = 'Pass' AND outcome_type = 'Successful') as successful_passes,
+        SAFE_DIVIDE(COUNTIF(type = 'Pass' AND outcome_type = 'Successful'), COUNTIF(type = 'Pass')) as pass_accuracy,
+        
+        COUNTIF(type IN ('Missed Shots', 'Saved Shot', 'Goal', 'Shot on Post')) as total_shots,
+        COUNTIF(type = 'Goal') as goals,
+        
+        COUNTIF(type = 'Ball Recovery') as recoveries,
+        COUNTIF(type = 'Interception') as interceptions,
+        COUNTIF(type = 'Tackle') as tackles
+        
+    FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_2025`
+    WHERE player IS NOT NULL
+    GROUP BY 1, 2
+    """
+
+
+def get_player_events_query(project_id: str, dataset_id: str, player: str) -> str:
+    """
+    Retorna eventos brutos de um jogador para plotagem de mapa.
+    """
+    return f"""
+    SELECT 
+        match_id,
+        team,
+        player,
+        type,
+        outcome_type,
+        x as x_start,
+        y as y_start,
+        end_x as x_end,
+        end_y as y_end,
+        period,
+        minute,
+        second
+    FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_2025`
+    WHERE player = '{player}'
+    """
