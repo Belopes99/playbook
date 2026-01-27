@@ -224,8 +224,8 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
             COUNTIF(type = 'Foul') as fouls,
             
             -- Qualifiers (String Parsing)
-            COUNTIF(REGEXP_CONTAINS(qualifiers, r'{re_assist}')) as assists,
-            COUNTIF(REGEXP_CONTAINS(qualifiers, r'{re_key}')) as key_passes
+            COUNTIF(REGEXP_CONTAINS(qualifiers, r'''{re_assist}''')) as assists,
+            COUNTIF(REGEXP_CONTAINS(qualifiers, r'''{re_key}''')) as key_passes
         FROM all_events
         GROUP BY 1, 2
     )
@@ -354,8 +354,8 @@ def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
             COUNTIF(type = 'Clearance') as clearances,
             COUNTIF(type = 'Foul') as fouls, -- Corrected column name if needed
             
-            COUNTIF(REGEXP_CONTAINS(qualifiers, r'{re_assist}')) as assists,
-            COUNTIF(REGEXP_CONTAINS(qualifiers, r'{re_key}')) as key_passes
+            COUNTIF(REGEXP_CONTAINS(qualifiers, r'''{re_assist}''')) as assists,
+            COUNTIF(REGEXP_CONTAINS(qualifiers, r'''{re_key}''')) as key_passes
         FROM all_events
         WHERE player IS NOT NULL
         GROUP BY 1, 2, 3
