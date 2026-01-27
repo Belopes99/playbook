@@ -145,6 +145,10 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
     # Start with simple Event Union. If it breaks, I'll fix.
     events_union = _build_events_union(project_id, dataset_id)
     
+    # Define Regex patterns outside f-string to avoid 'Invalid format specifier' errors
+    re_assist = r"['\"]displayName['\"]\s*:\s*['\"]Assist['\"]"
+    re_key = r"['\"]displayName['\"]\s*:\s*['\"]KeyPass['\"]"
+
     return f"""
     WITH all_schedule AS (
         {schedule_union}
@@ -187,6 +191,17 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
             IFNULL(home_score, 0) as goals_against,
             'Visitante' as side
         FROM match_metadata
+        UNION ALL
+        
+        SELECT 
+             game_id, 
+             match_date, 
+             season, 
+             away_team as team, 
+             IFNULL(away_score, 0) as goals_for, 
+             IFNULL(home_score, 0) as goals_against, 
+             'Visitante' as side 
+        FROM match_metadata 
     ),
     
     event_stats AS (
@@ -209,9 +224,8 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
             COUNTIF(type = 'Foul') as fouls,
             
             -- Qualifiers (String Parsing)
-            -- Using REGEX to handle flexible quotes (single or double) and spacing
-            COUNTIF(REGEXP_CONTAINS(qualifiers, r"['\"]displayName['\"]\s*:\s*['\"]Assist['\"]")) as assists,
-            COUNTIF(REGEXP_CONTAINS(qualifiers, r"['\"]displayName['\"]\s*:\s*['\"]KeyPass['\"]")) as key_passes
+            COUNTIF(REGEXP_CONTAINS(qualifiers, r'{re_assist}')) as assists,
+            COUNTIF(REGEXP_CONTAINS(qualifiers, r'{re_key}')) as key_passes
         FROM all_events
         GROUP BY 1, 2
     )
@@ -307,6 +321,10 @@ def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
     schedule_union = _build_schedule_union(project_id, dataset_id)
     events_union = _build_events_union(project_id, dataset_id)
 
+    # Regex safety
+    re_assist = r"['\"]displayName['\"]\s*:\s*['\"]Assist['\"]"
+    re_key = r"['\"]displayName['\"]\s*:\s*['\"]KeyPass['\"]"
+
     return f"""
     WITH all_schedule AS (
         {schedule_union}
@@ -334,10 +352,10 @@ def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
             COUNTIF(type = 'Interception') as interceptions,
             COUNTIF(type = 'Ball Recovery') as recoveries,
             COUNTIF(type = 'Clearance') as clearances,
-            COUNTIF(top = 'Foul') as fouls, -- Typo in previous context check, assuming 'Foul' is correct column match
+            COUNTIF(type = 'Foul') as fouls, -- Corrected column name if needed
             
-            COUNTIF(REGEXP_CONTAINS(qualifiers, r"['\"]displayName['\"]\s*:\s*['\"]Assist['\"]")) as assists,
-            COUNTIF(REGEXP_CONTAINS(qualifiers, r"['\"]displayName['\"]\s*:\s*['\"]KeyPass['\"]")) as key_passes
+            COUNTIF(REGEXP_CONTAINS(qualifiers, r'{re_assist}')) as assists,
+            COUNTIF(REGEXP_CONTAINS(qualifiers, r'{re_key}')) as key_passes
         FROM all_events
         WHERE player IS NOT NULL
         GROUP BY 1, 2, 3
