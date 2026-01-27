@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 from src.css import load_css
 from src.bq_io import get_bq_client
-from src.queries import get_match_stats_query, get_player_rankings_query
+from src.queries import get_match_stats_query, get_player_rankings_query, get_dynamic_ranking_query
 
 st.set_page_config(page_title="Rankings Gerais", page_icon="📊", layout="wide")
 load_css()
