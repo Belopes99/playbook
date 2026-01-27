@@ -209,8 +209,10 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
             COUNTIF(type = 'Foul') as fouls,
             
             -- Qualifiers (String Parsing)
-            COUNTIF(qualifiers LIKE '%"displayName": "Assist"%') as assists,
-            COUNTIF(qualifiers LIKE '%"displayName": "KeyPass"%') as key_passes
+            -- Data is stored as python dictionary string with single quotes, e.g. [{'displayName': 'Assist'}]
+            -- We escape single quotes in SQL string with ''
+            COUNTIF(qualifiers LIKE '%''displayName'': ''Assist''%') as assists,
+            COUNTIF(qualifiers LIKE '%''displayName'': ''KeyPass''%') as key_passes
         FROM all_events
         GROUP BY 1, 2
     )
@@ -335,8 +337,8 @@ def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
             COUNTIF(type = 'Clearance') as clearances,
             COUNTIF(type = 'Foul') as fouls,
             
-            COUNTIF(qualifiers LIKE '%"displayName": "Assist"%') as assists,
-            COUNTIF(qualifiers LIKE '%"displayName": "KeyPass"%') as key_passes
+            COUNTIF(qualifiers LIKE '%''displayName'': ''Assist''%') as assists,
+            COUNTIF(qualifiers LIKE '%''displayName'': ''KeyPass''%') as key_passes
         FROM all_events
         WHERE player IS NOT NULL
         GROUP BY 1, 2, 3
