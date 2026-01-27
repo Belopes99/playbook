@@ -63,12 +63,31 @@ with col_c4:
     st.write("") # Spacer
     st.write("")
     
+    # Smart Logic for Assists (UX Automation)
+    # If User selects "Goal" AND "Assisted", they 99% want to see the Assisters.
+    is_goal_context = sel_types and "Goal" in sel_types
+    has_assisted_tag = sel_qualifiers and "Assisted" in sel_qualifiers
+    
     # Only show "Related" toggle if relevant (Goal)
-    # This prevents confusion.
-    if sel_types and "Goal" in sel_types:
-        use_related = st.checkbox("Rank de Assistências", value=False, help="Marque para contar quem deu o passe (Assistência) ao invés de quem fez o Gol.")
+    if is_goal_context:
+        # Default to True if "Assisted" tag is present (Smart Auto)
+        default_val = True if has_assisted_tag else False
+        
+        # Dynamic key ensures state updates when filters change
+        chk_key = f"rel_chk_{is_goal_context}_{has_assisted_tag}"
+        
+        use_related = st.checkbox(
+            "Rank de Assistências", 
+            value=default_val, 
+            key=chk_key,
+            help="Marque para contar quem deu o passe (Assistência) ao invés de quem fez o Gol."
+        )
+        
         if use_related:
-            st.caption("ℹ️ Focando no Jogador Relacionado")
+            if has_assisted_tag and default_val:
+                st.caption("✅ Auto-ativado (Filtro 'Assisted')")
+            else:
+                st.caption("ℹ️ Focando no Jogador Relacionado")
     else:
         use_related = False
 
