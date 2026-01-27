@@ -582,3 +582,22 @@ def get_teams_match_count_query(project_id: str, dataset_id: str) -> str:
     GROUP BY 1, 2
     ORDER BY season DESC, total_games ASC
     """
+
+
+def get_all_teams_query(project_id: str, dataset_id: str) -> str:
+    """
+    Get unique list of teams for dropdowns.
+    """
+    schedule_union = _build_schedule_union(project_id, dataset_id)
+    return f"""
+    WITH all_schedule AS (
+        {schedule_union}
+    )
+    SELECT DISTINCT team FROM (
+        SELECT home_team as team FROM all_schedule
+        UNION ALL 
+        SELECT away_team as team FROM all_schedule
+    )
+    WHERE team IS NOT NULL
+    ORDER BY team
+    """
