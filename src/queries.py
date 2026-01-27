@@ -1,4 +1,5 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union, List
+import re
 
 # YEARS_TO_QUERY = range(2015, 2026)
 YEARS_TO_QUERY = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
@@ -146,7 +147,7 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
     events_union = _build_events_union(project_id, dataset_id)
     
     # Define Regex patterns outside f-string to avoid 'Invalid format specifier' errors
-    re_assist = r"['\"]displayName['\"]\s*:\s*['\"]Assist['\"]"
+    # Note: re_assist is no longer used for counting, as we use related_player_id on Goals
     re_key = r"['\"]displayName['\"]\s*:\s*['\"]KeyPass['\"]"
 
     return f"""
@@ -224,7 +225,9 @@ def get_match_stats_query(project_id: str, dataset_id: str) -> str:
             COUNTIF(type = 'Foul') as fouls,
             
             -- Qualifiers (String Parsing)
-            COUNTIF(REGEXP_CONTAINS(qualifiers, r'''{re_assist}''')) as assists,
+            -- Qualifiers (String Parsing)
+            -- Assist: Count Goals where related_player_id is set (Implicit Team Assist)
+            COUNTIF(type = 'Goal' AND related_player_id IS NOT NULL) as assists,
             COUNTIF(REGEXP_CONTAINS(qualifiers, r'''{re_key}''')) as key_passes
         FROM all_events
         GROUP BY 1, 2
@@ -322,7 +325,9 @@ def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
     events_union = _build_events_union(project_id, dataset_id)
 
     # Regex safety
-    re_assist = r"['\"]displayName['\"]\s*:\s*['\"]Assist['\"]"
+    # Regex safety
+    # re_assist removed, using join logic
+    re_key = r"['\"]displayName['\"]\s*:\s*['\"]KeyPass['\"]"
     re_key = r"['\"]displayName['\"]\s*:\s*['\"]KeyPass['\"]"
 
     return f"""
@@ -359,6 +364,24 @@ def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
         FROM all_events
         WHERE player IS NOT NULL
         GROUP BY 1, 2, 3
+    ),
+    
+    player_names AS (
+         SELECT DISTINCT player_id, player 
+         FROM all_events 
+         WHERE player IS NOT NULL
+    ),
+    
+    assist_stats AS (
+        SELECT
+            e.game_id,
+            n.player, -- Map ID to Name
+            e.team,
+            COUNT(*) as assists
+        FROM all_events e
+        JOIN player_names n ON e.related_player_id = n.player_id
+        WHERE e.type = 'Goal' AND e.related_player_id IS NOT NULL
+        GROUP BY 1, 2, 3
     )
     
     SELECT
@@ -376,9 +399,12 @@ def get_player_rankings_query(project_id: str, dataset_id: str) -> str:
         p.recoveries,
         p.clearances,
         p.fouls,
-        p.assists,
+        p.clearances,
+        p.fouls,
+        COALESCE(a.assists, 0) as assists,
         p.key_passes
     FROM player_stats p
+    LEFT JOIN assist_stats a ON p.game_id = a.game_id AND p.player = a.player AND p.team = a.team
     JOIN match_dates m ON p.game_id = m.game_id
     -- No GROUP BY here, we return raw match rows
     """
@@ -388,9 +414,10 @@ def get_dynamic_ranking_query(
     project_id: str, 
     dataset_id: str, 
     subject: str, # 'Equipes' or 'Jogadores'
-    event_type: str, 
-    outcome: str = "Todos", 
-    qualifier: str = None
+    event_types: object, # str or list
+    outcomes: object = "Todos", # str or list
+    qualifiers: object = None, # str or list
+    use_related_player: bool = False
 ) -> str:
     """
     Constructs a specific query based on dynamic user filters.
@@ -401,22 +428,43 @@ def get_dynamic_ranking_query(
     
     # Build WHERE clauses
     where_clauses = ["1=1"] # fallback
-    if event_type and event_type != "Todos":
-        where_clauses.append(f"type = '{event_type}'")
     
-    if outcome and outcome != "Todos":
-        # Check against outcome_type
-        # Assuming values are 'Successful', 'Unsuccessful' ... user might pass "Sucesso"
-        if outcome in ["Successful", "Unsuccessful"]:
-             where_clauses.append(f"outcome_type = '{outcome}'")
-        elif outcome == "Sucesso":
-             where_clauses.append(f"outcome_type = 'Successful'")
-        elif outcome == "Falha":
-             where_clauses.append(f"outcome_type = 'Unsuccessful'")
+    # 1. Event Type
+    if event_types and "Todos" not in event_types:
+        if isinstance(event_types, list):
+             types_str = "', '".join(event_types)
+             where_clauses.append(f"type IN ('{types_str}')")
+        else:
+             where_clauses.append(f"type = '{event_types}'")
+    
+    # 2. Outcome
+    if outcomes and "Todos" not in outcomes:
+        # Map generic UI outcomes to DB values if needed
+        # Assuming UI passes direct DB values or mapped ones.
+        # Let's handle the mapping here if lists are mixed?
+        # Simpler: Map before calling, or handle a few keywords.
+        
+        target_outcomes = []
+        if isinstance(outcomes, str): outcomes = [outcomes]
+        
+        for out in outcomes:
+            if out == "Sucesso": target_outcomes.append("Successful")
+            elif out == "Falha": target_outcomes.append("Unsuccessful")
+            else: target_outcomes.append(out)
+            
+        if target_outcomes:
+            out_str = "', '".join(target_outcomes)
+            where_clauses.append(f"outcome_type IN ('{out_str}')")
 
-    if qualifier:
-        # User flexible LIKE search
-        where_clauses.append(f"qualifiers LIKE '%{qualifier}%'")
+    # 3. Qualifiers (Regex OR)
+    if qualifiers and "Todos (Qualquer)" not in qualifiers:
+        if isinstance(qualifiers, str): qualifiers = [qualifiers]
+        # Build Regex OR: (KeyPass|Assist|Head)
+        # Escape special chars just in case
+        safe_quals = [re.escape(q) for q in qualifiers if q]
+        if safe_quals:
+            pattern = "|".join(safe_quals)
+            where_clauses.append(f"REGEXP_CONTAINS(qualifiers, r'{pattern}')")
 
     where_str = " AND ".join(where_clauses)
     
@@ -433,28 +481,59 @@ def get_dynamic_ranking_query(
         join_on = "p.game_id = m.game_id" # Match dates join is same
         base_where = "team IS NOT NULL"
 
+    # Special handling for Assists (Goal Related Player)
+    extra_cte = ""
+    if use_related_player and subject == "Jogadores":
+        extra_cte = """
+        , player_names AS (
+             SELECT DISTINCT player_id, player FROM all_events WHERE player IS NOT NULL
+        )
+        """
+        # Override for Assist Logic
+        filtered_events_block = f"""
+        filtered_events AS (
+            SELECT
+                e.game_id,
+                n.player,
+                e.team,
+                COUNT(*) as metric_count
+            FROM all_events e
+            JOIN player_names n ON e.related_player_id = n.player_id
+            WHERE 1=1
+            AND e.related_player_id IS NOT NULL
+            AND {where_str}
+            GROUP BY 1, 2, 3
+        )
+        """
+    else:
+        # Standard Logic
+        filtered_events_block = f"""
+        filtered_events AS (
+            SELECT
+                {select_cols},
+                COUNT(*) as metric_count
+            FROM all_events
+            WHERE {base_where}
+            AND {where_str}
+            GROUP BY {group_cols}
+        )
+        """
+
     return f"""
     WITH all_schedule AS (
         {schedule_union}
     ),
     all_events AS (
         {events_union}
-    ),
+    )
+    {extra_cte},
     
     match_dates AS (
         SELECT game_id, match_date as start_time, season
         FROM all_schedule
     ),
     
-    filtered_events AS (
-        SELECT
-            {select_cols},
-            COUNT(*) as metric_count
-        FROM all_events
-        WHERE {base_where}
-        AND {where_str}
-        GROUP BY {group_cols}
-    )
+    {filtered_events_block}
     
     SELECT
         p.*,

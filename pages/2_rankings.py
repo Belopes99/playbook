@@ -22,141 +22,84 @@ st.title("📊 Rankings Gerais")
 st.divider()
 
 # --- 2. CONFIGURATION & SIDEBAR ---
-col_filter_1, col_filter_2, col_filter_3, col_filter_4, col_filter_5 = st.columns(5)
+col_filter_1, col_filter_2, col_filter_3, col_filter_4 = st.columns(4)
 
 with col_filter_1:
-    subject = st.radio(
-        "Analisar:",
-        ["Equipes", "Jogadores"],
-        index=0,
-        horizontal=True
-    )
+    subject = st.radio("Analisar:", ["Equipes", "Jogadores"], index=0, horizontal=True)
 
 with col_filter_2:
-    aggregation_mode = st.radio(
-        "Agrupamento:",
-        ["Por Temporada", "Histórico"],
-        index=0,
-        horizontal=True
-    )
+    aggregation_mode = st.radio("Agrupamento:", ["Por Temporada", "Histórico"], index=0, horizontal=True)
+
+with col_filter_3:
+    # Date Filter
+    # Determine min/max from cache or default
+    # Note: We load raw data later, but need default dates for UI?
+    # Ideally date filter applies to query. But here we filter dataframe.
+    # We will set a default range.
+    default_end = datetime.now().date()
+    default_start = default_end - timedelta(days=365)
+    
+    date_range = st.date_input("Período:", value=(default_start, default_end), format="DD/MM/YYYY")
 
 with col_filter_4:
-    metric_selection = st.selectbox(
-        "Métrica:",
-        ["Personalizado 🛠️", "Gols", "Assistências", "Passes Decisivos", "Chutes", "Passes Certos", "Desarmes", "Interceptações", "Recuperações", "Faltas"],
-    index=0 # Default Personalizado
-    )
-
-# --- METRIC PRESETS CONFIGURATION ---
-# Maps specific selection to Dynamic Query parameters
-METRIC_PRESETS = {
-    "Assistências": {"type": "Pass", "outcome": "Sucesso", "qualifier": "Assist"},
-    "Passes Decisivos": {"type": "Pass", "outcome": "Sucesso", "qualifier": "KeyPass"},
-    "Chutes": {"type": "Shot", "outcome": "Todos", "qualifier": ""},
-    "Passes Certos": {"type": "Pass", "outcome": "Sucesso", "qualifier": ""},
-    "Desarmes": {"type": "Tackle", "outcome": "Todos", "qualifier": ""}, # Tackles usually total
-    "Interceptações": {"type": "Interception", "outcome": "Todos", "qualifier": ""},
-    "Recuperações": {"type": "Ball Recovery", "outcome": "Todos", "qualifier": ""},
-    "Faltas": {"type": "Foul", "outcome": "Todos", "qualifier": ""},
-}
-
-
-# --- CUSTOM FILTERS ---
-custom_type = "Todos"
-custom_outcome = "Todos"
-custom_qualifier = ""
-
-if metric_selection == "Personalizado 🛠️":
-    st.markdown("##### Configurar Métrica Personalizada")
-    row_c1, row_c2, row_c3 = st.columns(3)
-    with row_c1:
-        custom_type = st.selectbox("Tipo de Evento", 
-            ["Pass", "Shot", "Ball Recovery", "Tackle", "Interception", "Foul", "Save", "Goal", "Clearance", "TakeOn", "Aerial"],
-            index=0
-        )
-    with row_c2:
-        custom_outcome = st.selectbox("Resultado", ["Todos", "Sucesso", "Falha"], index=0)
-    with row_c3:
-        qualifier_opts = ["Todos (Qualquer)", "KeyPass", "Assist", "BigChance", "Head", "Cross", "Corner", "FreeKick", "Penalty", "Throughball", "Longball", "Chipped", "LayOff", "Volley", "OwnGoal"]
-        custom_qualifier_sel = st.selectbox("Qualificador", options=qualifier_opts, index=0)
-        
-        if "Todos" in custom_qualifier_sel:
-            custom_qualifier = ""
-        else:
-            custom_qualifier = custom_qualifier_sel
-
-
-with col_filter_5:
     top_n = st.number_input("Top N:", 1, 100, 10)
-    
-    normalization_mode = st.radio(
-        "Visualizar:",
-        ["Total", "Por Jogo"],
-        index=0,
-        horizontal=True,
-        label_visibility="collapsed" 
-    )
+    normalization_mode = st.radio("Visualizar:", ["Total", "Por Jogo"], index=0, horizontal=True, label_visibility="collapsed")
+
+st.divider()
+st.markdown("##### 🛠️ Configurar Filtros")
+
+col_c1, col_c2, col_c3, col_c4 = st.columns([2, 1, 2, 1])
+
+# Lists for filtering
+EVENT_TYPES = ["Pass", "Shot", "Ball Recovery", "Tackle", "Interception", "Foul", "Save", "Goal", "Clearance", "TakeOn", "Aerial", "Error", "Challenge", "Dispossessed"]
+OUTCOMES = ["Sucesso", "Falha"]
+QUALIFIERS = ["KeyPass", "Assisted", "BigChanceCreated", "LeadingToGoal", "LeadingToAttempt", "Head", "Cross", "Corner", "FreeKick", "Penalty", "Throughball", "Longball", "Chipped", "LayOff", "Volley", "OwnGoal", "Red", "Yellow"]
+
+with col_c1:
+    sel_types = st.multiselect("Tipos de Evento", EVENT_TYPES, default=["Goal"])
+
+with col_c2:
+    sel_outcomes = st.multiselect("Resultados", OUTCOMES, default=[]) # Empty = All
+
+with col_c3:
+    sel_qualifiers = st.multiselect("Qualificadores (Tags)", QUALIFIERS, default=[])
+
+with col_c4:
+    st.write("") # Spacer
+    st.write("")
+    use_related = st.checkbox("Contar Relacionado?", value=False, help="Use para Assistências (Conta quem fez o passe para o Gol)")
 
 
 # --- 3. DATA LOADING & UNIFICATION ---
 PROJECT_ID = "betterbet-467621"
 DATASET_ID = "betterdata"
 
-# Legacy Standard Loaders (Only for pure Goals/Score if needed)
-@st.cache_data(ttl=3600)
-def load_team_data():
-    client = get_bq_client(project=PROJECT_ID)
-    query = get_match_stats_query(PROJECT_ID, DATASET_ID)
-    df = client.query(query).to_dataframe()
-    if "match_date" in df.columns:
-        df["match_date"] = pd.to_datetime(df["match_date"]).dt.date
-    return df
-
-@st.cache_data(ttl=3600)
-def load_player_data():
-    client = get_bq_client(project=PROJECT_ID)
-    query = get_player_rankings_query(PROJECT_ID, DATASET_ID)
-    df = client.query(query).to_dataframe()
-    if "match_date" in df.columns:
-        df["match_date"] = pd.to_datetime(df["match_date"]).dt.date
-    return df
-
 # Dynamic Loader
-@st.cache_data(ttl=300) # Shorter TTL for dynamic
-def load_dynamic_data(subj, etype, out, qual):
+@st.cache_data(ttl=300) 
+def load_dynamic_data(subj, etypes, outs, quals, use_related_player=False):
     client = get_bq_client(project=PROJECT_ID)
-    query = get_dynamic_ranking_query(PROJECT_ID, DATASET_ID, subj, etype, out, qual)
+    # Convert empty lists to "Todos" equivalents effectively handled by query logic or passed as empty list
+    # Query logic handles list checks.
+    
+    query = get_dynamic_ranking_query(PROJECT_ID, DATASET_ID, subj, etypes, outs, quals, use_related_player)
     df = client.query(query).to_dataframe()
     if "match_date" in df.columns:
         df["match_date"] = pd.to_datetime(df["match_date"]).dt.date
     return df
 
 try:
-    # Determine Query Parameters
-    # 1. Custom
-    if metric_selection == "Personalizado 🛠️":
-        q_type = custom_type
-        # Map Outcome UI to Query Value
-        out_map = {"Sucesso": "Successful", "Falha": "Unsuccessful", "Todos": "Todos"}
-        q_outcome = out_map.get(custom_outcome, "Todos")
-        q_qualifier = custom_qualifier
+    # Prepare params
+    q_types = sel_types if sel_types else "Todos"
+    q_outcomes = sel_outcomes if sel_outcomes else "Todos"
+    q_qualifiers = sel_qualifiers if sel_qualifiers else "Todos (Qualquer)"
+    
+    # Check for empty selection prevention?
+    if not sel_types and not sel_outcomes and not sel_qualifiers:
+        st.info("Selecione pelo menos um filtro acima.")
+        st.stop()
         
-        df_raw = load_dynamic_data(subject, q_type, q_outcome, q_qualifier)
-        
-    # 2. Preset Metrics (Assistências, etc.) -> Use Dynamic Query too!
-    elif metric_selection in METRIC_PRESETS:
-        preset = METRIC_PRESETS[metric_selection]
-        # Query
-        df_raw = load_dynamic_data(subject, preset["type"], preset["outcome"], preset["qualifier"])
-
-    # 3. Legacy/Standard (Mainly for 'Gols' or fallback)
-    else:
-        # Load standard pre-aggregated data
-        if subject == "Equipes":
-            df_raw = load_team_data()
-        else:
-            df_raw = load_player_data()
-            
+    df_raw = load_dynamic_data(subject, q_types, q_outcomes, q_qualifiers, use_related)
+    
 except Exception as e:
     st.error(f"Erro ao carregar dados: {e}")
     st.stop()
@@ -286,27 +229,18 @@ elif subject == "Jogadores":
 # 4.3 Metrics Calculation (Per Match)
 # 4.3 Metrics Mapping
 # 4.3 Metrics Mapping
-if metric_selection == "Personalizado 🛠️":
-    # Use the dynamic column
-    base_col = "metric_count"
-    base_label = f"{custom_type}"
-    if custom_qualifier:
-        base_label += f" ({custom_qualifier})"
-    if custom_outcome != "Todos":
-        base_label += f" - {custom_outcome}"
+# Since we only have Custom Dynamic now:
+base_col = "metric_count"
 
-elif metric_selection in METRIC_PRESETS: # Handle Presets (Dynamic)
-    base_col = "metric_count"
-    base_label = metric_selection
+# Construct label from selections
+type_label = ", ".join(sel_types) if sel_types else "Todos Eventos"
+out_label = f" ({', '.join(sel_outcomes)})" if sel_outcomes else ""
+qual_label = f" [{', '.join(sel_qualifiers)}]" if sel_qualifiers else ""
+rel_label = " (Relacionado)" if use_related else ""
 
-else:
-    # Standard Legacy Mapping (Only Gols really)
-    metric_map = {
-        "Gols": {"col": "goals_for", "label": "Gols"},
-    }
-    sel_metric = metric_map.get(metric_selection, {"col": "goals_for", "label": "Gols"})
-    base_col = sel_metric["col"]
-    base_label = sel_metric["label"]
+base_label = f"{type_label}{qual_label}{out_label}{rel_label}"
+if len(base_label) > 50:
+    base_label = base_label[:47] + "..."
 
 # 4.4 Calc P90/Total
 if normalization_mode == "Por Jogo" or normalization_mode == "Por Jogo (Média)": # Handle label change

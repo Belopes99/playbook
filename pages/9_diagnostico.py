@@ -122,72 +122,46 @@ with tab_macro:
             hide_index=True
         )
 
-# --- NEW TAB: QUALIFIERS INSPECTOR ---
-# To debug why KeyPass == Assist
-with st.spinner("Carregando inspetor de qualifiers..."):
-    # We need a new query to fetch raw qualifiers for inspection
-    # Limited to recent events to avoid huge load
-    pass
-
-st.divider()
-st.subheader("🔍 Inspetor de Qualifiers (Tags)")
-
-@st.cache_data(ttl=300)
-def inspect_qualifiers_query(project_id, dataset_id, event_type="Pass", limit=1000):
-    # Fetch raw qualifiers for specific event type
-    # Using 2024 as default recent sample
-    return f"""
-    SELECT 
-        game_id, 
-        player, 
-        team, 
-        type, 
-        outcome_type,
-        qualifiers
-    FROM `{project_id}.{dataset_id}.eventos_brasileirao_serie_a_2024`
-    WHERE type = '{event_type}'
-    LIMIT {limit}
-    """
-
-col_insp_1, col_insp_2 = st.columns(2)
-with col_insp_1:
-    insp_type = st.selectbox("Tipo de Evento para Inspeção", ["Pass", "Shot", "Foul", "Goal"], index=0)
-with col_insp_2:
-    insp_limit = st.number_input("Amostra (linhas)", 100, 10000, 1000)
-
-if st.button("Carregar Amostra de Qualifiers"):
-    try:
-        client = get_bq_client(project=PROJECT_ID)
-        q_insp = inspect_qualifiers_query(PROJECT_ID, DATASET_ID, insp_type, insp_limit)
-        df_insp = client.query(q_insp).to_dataframe()
-        
-        st.success(f"Carregado {len(df_insp)} eventos do tipo {insp_type}.")
-        
-        # Analysis
-        # 1. Check regex matches for Assist vs KeyPass
-        re_assist = r"['\"]displayName['\"]\s*:\s*['\"]Assist['\"]"
-        re_key = r"['\"]displayName['\"]\s*:\s*['\"]KeyPass['\"]"
-        
-        import re
-        
-        def has_tag(text, pattern):
-            if not isinstance(text, str): return False
-            return bool(re.search(pattern, text))
-            
-        df_insp["Has_Assist"] = df_insp["qualifiers"].apply(lambda x: has_tag(x, re_assist))
-        df_insp["Has_KeyPass"] = df_insp["qualifiers"].apply(lambda x: has_tag(x, re_key))
-        
-        # Summary
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total com Assist", df_insp["Has_Assist"].sum())
-        c2.metric("Total com KeyPass", df_insp["Has_KeyPass"].sum())
-        c3.metric("Interseção (Ambos)", df_insp[(df_insp["Has_Assist"]) & (df_insp["Has_KeyPass"])].shape[0])
-        
-        st.markdown("##### Visualizar Dados Brutos (Onde existe overlap)")
-        st.dataframe(
-            df_insp[df_insp["Has_Assist"] | df_insp["Has_KeyPass"]].head(50),
-            use_container_width=True
-        )
-        
     except Exception as e:
         st.error(f"Erro na inspeção: {e}")
+
+st.divider()
+st.subheader("🔍 Validação de Métricas: Assistências vs KeyPasses")
+
+if st.button("Executar Diagnóstico Cruzado"):
+    try:
+        client = get_bq_client(project=PROJECT_ID)
+        
+        # Query 1: Count KeyPasses (Standard)
+        q_kp = f"""
+        SELECT COUNT(*) as cnt 
+        FROM `{PROJECT_ID}.{DATASET_ID}.eventos_brasileirao_serie_a_2024`
+        WHERE type = 'Pass' 
+        AND REGEXP_CONTAINS(qualifiers, r"['\\\"]displayName['\\\"]\\s*:\\s*['\\\"]KeyPass['\\\"]")
+        """
+        df_kp = client.query(q_kp).to_dataframe()
+        val_kp = df_kp['cnt'].iloc[0]
+        
+        # Query 2: Count True Assists (Goal Relationship)
+        q_assist = f"""
+        SELECT COUNT(*) as cnt
+        FROM `{PROJECT_ID}.{DATASET_ID}.eventos_brasileirao_serie_a_2024`
+        WHERE type = 'Goal' 
+        AND related_player_id IS NOT NULL
+        """
+        df_assist = client.query(q_assist).to_dataframe()
+        val_assist = df_assist['cnt'].iloc[0]
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Key Passes (Passes Decisivos)", val_kp)
+        col2.metric("Assists (Gols - RelatedPlayer)", val_assist)
+        
+        if val_kp == val_assist:
+             col3.error("⚠️ Ainda idênticos!")
+        else:
+             col3.success("✅ Distintos! Correção validada.")
+             
+        st.info(f"Explicação: 'Key Passes' conta passes que levaram a finalização (~{val_kp}). 'Assistências' agora conta apenas Gols com assistidor identificado (~{val_assist}).")
+        
+    except Exception as e:
+        st.error(f"Erro no diagnóstico: {e}")
