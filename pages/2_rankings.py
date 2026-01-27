@@ -19,6 +19,10 @@ load_css()
 
 st.title("📊 Rankings Gerais")
 
+PROJECT_ID = "betterbet-467621"
+DATASET_ID = "betterdata"
+
+
 # --- 1. CONFIGURATION & SIDEBAR ---
 st.divider()
 
@@ -105,10 +109,10 @@ with col_c4:
 
 
 # --- 3. DATA LOADING & UNIFICATION ---
-PROJECT_ID = "betterbet-467621"
-DATASET_ID = "betterdata"
+# (Constants moved to top)
 
 # Dynamic Loader
+
 @st.cache_data(ttl=300) 
 @st.cache_data(ttl=300) 
 def load_dynamic_data(subj, etypes, outs, quals, use_related_player=False, teams=None):
