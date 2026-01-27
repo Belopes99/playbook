@@ -417,7 +417,8 @@ def get_dynamic_ranking_query(
     event_types: object, # str or list
     outcomes: object = "Todos", # str or list
     qualifiers: object = None, # str or list
-    use_related_player: bool = False
+    use_related_player: bool = False,
+    teams: object = None # str or list (New Team Filter)
 ) -> str:
     """
     Constructs a specific query based on dynamic user filters.
@@ -465,6 +466,15 @@ def get_dynamic_ranking_query(
         if safe_quals:
             pattern = "|".join(safe_quals)
             where_clauses.append(f"REGEXP_CONTAINS(qualifiers, r'{pattern}')")
+
+    # 4. Teams
+    if teams and "Todos" not in teams:
+        if isinstance(teams, list):
+             teams_str = "', '".join(teams)
+             where_clauses.append(f"team IN ('{teams_str}')")
+        else:
+             where_clauses.append(f"team = '{teams}'")
+
 
     where_str = " AND ".join(where_clauses)
     

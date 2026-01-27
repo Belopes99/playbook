@@ -11,7 +11,8 @@ from datetime import datetime, timedelta
 
 from src.css import load_css
 from src.bq_io import get_bq_client
-from src.queries import get_match_stats_query, get_player_rankings_query, get_dynamic_ranking_query
+from src.queries import get_match_stats_query, get_player_rankings_query, get_dynamic_ranking_query, get_all_teams_query
+
 
 st.set_page_config(page_title="Rankings Gerais", page_icon="📊", layout="wide")
 load_css()
@@ -42,15 +43,26 @@ with col_filter_4:
 st.divider()
 st.markdown("##### 🛠️ Configurar Filtros")
 
-col_c1, col_c2, col_c3, col_c4 = st.columns([2, 1, 2, 1])
+col_c1, col_c2, col_c3, col_c4 = st.columns([1.5, 1.5, 2, 0.5]) # Adjusted Ratios
 
-# Lists for filtering
+# Lists for filtering (Load Teams first)
+@st.cache_data(ttl=3600)
+def load_team_list():
+    client = get_bq_client(project=PROJECT_ID)
+    q = get_all_teams_query(PROJECT_ID, DATASET_ID)
+    df = client.query(q).to_dataframe()
+    return df["team"].tolist()
+
+ALL_TEAMS = load_team_list()
+
 EVENT_TYPES = ["Pass", "Shot", "Ball Recovery", "Tackle", "Interception", "Foul", "Save", "Goal", "Clearance", "TakeOn", "Aerial", "Error", "Challenge", "Dispossessed"]
 OUTCOMES = ["Sucesso", "Falha"]
 QUALIFIERS = ["KeyPass", "Assisted", "BigChanceCreated", "LeadingToGoal", "LeadingToAttempt", "Head", "Cross", "Corner", "FreeKick", "Penalty", "Throughball", "Longball", "Chipped", "LayOff", "Volley", "OwnGoal", "Red", "Yellow"]
 
 with col_c1:
+    sel_teams = st.multiselect("Equipes (Opcional)", ALL_TEAMS, default=[])
     sel_types = st.multiselect("Tipos de Evento", EVENT_TYPES, default=["Goal"])
+
 
 with col_c2:
     sel_outcomes = st.multiselect("Resultados", OUTCOMES, default=[]) # Empty = All
@@ -98,16 +110,18 @@ DATASET_ID = "betterdata"
 
 # Dynamic Loader
 @st.cache_data(ttl=300) 
-def load_dynamic_data(subj, etypes, outs, quals, use_related_player=False):
+@st.cache_data(ttl=300) 
+def load_dynamic_data(subj, etypes, outs, quals, use_related_player=False, teams=None):
     client = get_bq_client(project=PROJECT_ID)
     # Convert empty lists to "Todos" equivalents effectively handled by query logic or passed as empty list
     # Query logic handles list checks.
     
-    query = get_dynamic_ranking_query(PROJECT_ID, DATASET_ID, subj, etypes, outs, quals, use_related_player)
+    query = get_dynamic_ranking_query(PROJECT_ID, DATASET_ID, subj, etypes, outs, quals, use_related_player, teams)
     df = client.query(query).to_dataframe()
     if "match_date" in df.columns:
         df["match_date"] = pd.to_datetime(df["match_date"]).dt.date
     return df
+
 
 try:
     # Prepare params
@@ -116,11 +130,15 @@ try:
     q_qualifiers = sel_qualifiers if sel_qualifiers else "Todos (Qualquer)"
     
     # Check for empty selection prevention?
-    if not sel_types and not sel_outcomes and not sel_qualifiers:
+    if not sel_types and not sel_outcomes and not sel_qualifiers and not sel_teams:
         st.info("Selecione pelo menos um filtro acima.")
         st.stop()
+    
+    # Pass teams
+    q_teams = sel_teams if sel_teams else None
         
-    df_raw = load_dynamic_data(subject, q_types, q_outcomes, q_qualifiers, use_related)
+    df_raw = load_dynamic_data(subject, q_types, q_outcomes, q_qualifiers, use_related, q_teams)
+
     
 except Exception as e:
     st.error(f"Erro ao carregar dados: {e}")
@@ -259,11 +277,14 @@ base_col = "metric_count"
 
 # Construct label from selections
 type_label = ", ".join(sel_types) if sel_types else "Todos Eventos"
+team_label = f" ({', '.join(sel_teams)})" if sel_teams else "" 
 out_label = f" ({', '.join(sel_outcomes)})" if sel_outcomes else ""
+
 qual_label = f" [{', '.join(sel_qualifiers)}]" if sel_qualifiers else ""
 rel_label = " (Assistências)" if use_related else ""
 
-base_label = f"{type_label}{qual_label}{out_label}{rel_label}"
+base_label = f"{type_label}{qual_label}{out_label}{rel_label}{team_label}"
+
 if len(base_label) > 50:
     base_label = base_label[:47] + "..."
 
