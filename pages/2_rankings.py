@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 from src.css import load_css
 from src.bq_io import get_bq_client
-from src.queries import get_match_stats_query, get_player_rankings_query, get_dynamic_ranking_query, get_all_teams_query, get_all_players_query
+from src.queries import get_match_stats_query, get_player_rankings_query, get_dynamic_ranking_query, get_all_teams_query, get_all_players_query, get_conversion_ranking_query
 
 
 
@@ -29,6 +29,7 @@ col_filter_1, col_filter_2, col_filter_3, col_filter_4 = st.columns(4)
 
 with col_filter_1:
     subject = st.radio("Analisar:", ["Equipes", "Jogadores"], index=0, horizontal=True)
+    analysis_type = st.radio("Tipo de Análise:", ["Volume Total", "Eficiência/Conversão"], index=0, horizontal=True)
 
 with col_filter_2:
     aggregation_mode = st.radio("Agrupamento:", ["Por Temporada", "Histórico"], index=0, horizontal=True)
@@ -112,55 +113,62 @@ QUALIFIERS = ["KeyPass", "Assisted", "BigChanceCreated", "LeadingToGoal", "Leadi
 
 
 
-# Defining layout columns for filters (Force Update)
-col_c1, col_c2, col_c3, col_c4 = st.columns([1.5, 1.5, 2, 0.5])
+# --- CONFIG FILTERS ---
 
-
-with col_c1:
-
-    # Team Selection moved up
-    sel_types = st.multiselect("Tipos de Evento", EVENT_TYPES, default=["Goal"])
-
-
-
-with col_c2:
-    sel_outcomes = st.multiselect("Resultados", OUTCOMES, default=[]) # Empty = All
-
-with col_c3:
-    sel_qualifiers = st.multiselect("Qualificadores (Tags)", QUALIFIERS, default=[])
-
-
-with col_c4:
-    st.write("") # Spacer
-    st.write("")
+if analysis_type == "Volume Total":
+    # STANDARD MODE - Single Set of Filters
     
-    # Smart Logic for Assists (UX Automation)
-    # If User selects "Goal" AND "Assisted", they 99% want to see the Assisters.
-    is_goal_context = sel_types and "Goal" in sel_types
-    has_assisted_tag = sel_qualifiers and "Assisted" in sel_qualifiers
+    col_c1, col_c2, col_c3, col_c4 = st.columns([1.5, 1.5, 2, 0.5])
     
-    # Only show "Related" toggle if relevant (Goal)
-    if is_goal_context:
-        # Default to True if "Assisted" tag is present (Smart Auto)
-        default_val = True if has_assisted_tag else False
+    with col_c1:
+        sel_types = st.multiselect("Tipos de Evento", EVENT_TYPES, default=["Goal"])
+    with col_c2:
+        sel_outcomes = st.multiselect("Resultados", OUTCOMES, default=[])
+    with col_c3:
+        sel_qualifiers = st.multiselect("Qualificadores (Tags)", QUALIFIERS, default=[])
+
+    with col_c4: 
+        st.write("")
+        st.write("")
+        is_goal_context = sel_types and "Goal" in sel_types
+        has_assisted_tag = sel_qualifiers and "Assisted" in sel_qualifiers
         
-        # Dynamic key ensures state updates when filters change
-        chk_key = f"rel_chk_{is_goal_context}_{has_assisted_tag}"
-        
-        use_related = st.checkbox(
-            "Rank de Assistências", 
-            value=default_val, 
-            key=chk_key,
-            help="Marque para contar quem deu o passe (Assistência) ao invés de quem fez o Gol."
-        )
-        
-        if use_related:
-            if has_assisted_tag and default_val:
-                st.caption("✅ Auto-ativado (Filtro 'Assisted')")
-            else:
-                st.caption("ℹ️ Focando no Jogador Relacionado")
-    else:
-        use_related = False
+        if is_goal_context:
+            default_val = True if has_assisted_tag else False
+            chk_key = f"rel_chk_{is_goal_context}_{has_assisted_tag}"
+            use_related = st.checkbox("Rank de Assistências", value=default_val, key=chk_key)
+        else:
+            use_related = False
+
+    # Mock variables for Conversion Mode logic
+    num_types, num_out, num_qual = sel_types, sel_outcomes, sel_qualifiers
+    den_types, den_out, den_qual = [], [], []
+
+else:
+    # CONVERSION MODE - Dual Set
+    use_related = False # Disable related logic for conversion for now (complexity)
+    
+    st.info("💡 Modo Conversão: Defina o Numerador (o que conta como sucesso) e o Denominador (o total de tentativas).")
+    
+    c_num, c_den = st.columns(2)
+    
+    with c_num:
+        st.markdown("#### 🟢 Numerador (Sucesso)")
+        num_types = st.multiselect("Eventos (Num)", EVENT_TYPES, default=["Goal"])
+        num_out = st.multiselect("Resultados (Num)", OUTCOMES, default=[])
+        num_qual = st.multiselect("Tags (Num)", QUALIFIERS, default=[])
+
+    with c_den:
+        st.markdown("#### 🔵 Denominador (Base)")
+        den_types = st.multiselect("Eventos (Den)", EVENT_TYPES, default=["Goal", "MissedShots", "SavedShot", "ShotOnPost"])
+        den_out = st.multiselect("Resultados (Den)", OUTCOMES, default=[])
+        den_qual = st.multiselect("Tags (Den)", QUALIFIERS, default=[])
+    
+    # Map to existing vars for compatibility where needed, though we will branch logic
+    sel_types = num_types 
+    sel_outcomes = num_out
+    sel_qualifiers = num_qual
+
 
 
 # --- 3. DATA LOADING & UNIFICATION ---
@@ -169,13 +177,21 @@ with col_c4:
 # Dynamic Loader
 
 @st.cache_data(ttl=300) 
-@st.cache_data(ttl=300) 
-def load_dynamic_data(subj, etypes, outs, quals, use_related_player=False, teams=None, players=None):
+@st.cache_data(ttl=300)
+def load_dynamic_data(subj, etypes, outs, quals, use_rel, teams, players, a_type, d_types=None, d_outs=None, d_quals=None):
     client = get_bq_client(project=PROJECT_ID)
-    # Convert empty lists to "Todos" equivalents effectively handled by query logic or passed as empty list
-    # Query logic handles list checks.
     
-    query = get_dynamic_ranking_query(PROJECT_ID, DATASET_ID, subj, etypes, outs, quals, use_related_player, teams, players)
+    if a_type == "Volume Total":
+        query = get_dynamic_ranking_query(PROJECT_ID, DATASET_ID, subj, etypes, outs, quals, use_rel, teams, players)
+    else:
+        # Conversion
+        query = get_conversion_ranking_query(
+            PROJECT_ID, DATASET_ID, subj,
+            etypes, outs, quals,
+            d_types, d_outs, d_quals,
+            teams, players
+        )
+
     df = client.query(query).to_dataframe()
 
     if "match_date" in df.columns:
@@ -190,15 +206,31 @@ try:
     q_qualifiers = sel_qualifiers if sel_qualifiers else "Todos (Qualquer)"
     
     # Check for empty selection prevention?
-    if not sel_types and not sel_outcomes and not sel_qualifiers and not sel_teams:
-        st.info("Selecione pelo menos um filtro acima.")
-        st.stop()
-    
     # Pass teams and players
     q_teams = sel_teams if sel_teams else None
     q_players = sel_players if sel_players else None
-        
-    df_raw = load_dynamic_data(subject, q_types, q_outcomes, q_qualifiers, use_related, q_teams, q_players)
+    
+    # Validation for conversion
+    if analysis_type == "Eficiência/Conversão":
+        if not num_types or not den_types:
+             st.warning("Selecione eventos para Numerador e Denominador.")
+             st.stop()
+             
+        df_raw = load_dynamic_data(
+            subject, num_types, num_out, num_qual, False, q_teams, q_players,
+            analysis_type, den_types, den_out, den_qual
+        )
+    else:
+        # Standard
+        if not sel_types and not sel_outcomes and not sel_qualifiers and not sel_teams:
+            st.info("Selecione pelo menos um filtro acima.")
+            # st.stop() # Allowing empty to load all? Maybe heavy.
+            pass
+
+        df_raw = load_dynamic_data(
+            subject, q_types, q_outcomes, q_qualifiers, use_related, q_teams, q_players,
+            analysis_type
+        )
 
 
     
@@ -268,13 +300,9 @@ if subject == "Equipes":
     # Aggregation
     agg_dict = {
         "goals_for": "sum", "goals_against": "sum", 
-        "total_passes": "sum", "successful_passes": "sum", 
-        "total_shots": "sum", "shots_on_target": "sum",
-        "tackles": "sum", "interceptions": "sum", 
-        "recoveries": "sum", "clearances": "sum",
-        "saves": "sum", "fouls": "sum",
-        "assists": "sum", "key_passes": "sum",
-        "metric_count": "sum" # For dynamic
+        "metric_count": "sum", # Standard mode
+        "numerator": "sum", # Conversion mode
+        "denominator": "sum" # Conversion mode
     }
     
     # Filter known columns only (safe check)
@@ -303,11 +331,9 @@ elif subject == "Jogadores":
 
     agg_dict = {
         "goals": "sum", "shots": "sum", 
-        "successful_passes": "sum", "total_passes": "sum",
-        "tackles": "sum", "interceptions": "sum",
-        "recoveries": "sum", "clearances": "sum", "fouls": "sum",
-        "assists": "sum", "key_passes": "sum",
-        "metric_count": "sum" # For dynamic
+        "metric_count": "sum",
+        "numerator": "sum",
+        "denominator": "sum"
     }
     
     # Filter known columns only (safe check)
@@ -334,35 +360,52 @@ elif subject == "Jogadores":
 # 4.3 Metrics Calculation (Per Match)
 # 4.3 Metrics Mapping
 # 4.3 Metrics Mapping
-# Since we only have Custom Dynamic now:
-base_col = "metric_count"
+# 4.3 Metrics Calculation (Standard) vs Conversion Ratio
+if analysis_type == "Eficiência/Conversão":
+    base_col = "ratio_pct"
+    df_agg["ratio_val"] = (df_agg["numerator"] / df_agg["denominator"]).fillna(0)
+    df_agg["ratio_pct"] = df_agg["ratio_val"] * 100
+    
+    # Label
+    # Simplify label construction
+    n_lab = num_types[0] if num_types else "N"
+    d_lab = den_types[0] if den_types else "D"
+    if len(num_types) > 1: n_lab += "+"
+    if len(den_types) > 1: d_lab += "+"
+    
+    base_label = f"Conversão ({n_lab} / {d_lab})"
+    metric_label = f"{base_label} (%)"
+    text_format = ".1f"
+    metric_col = "display_metric"
+    df_agg[metric_col] = df_agg["ratio_pct"]
 
-# Construct label from selections
-type_label = ", ".join(sel_types) if sel_types else "Todos Eventos"
-team_label = f" ({', '.join(sel_teams)})" if sel_teams else "" 
-player_label = f" ({', '.join(sel_players)})" if sel_players else ""
-out_label = f" ({', '.join(sel_outcomes)})" if sel_outcomes else ""
-
-qual_label = f" [{', '.join(sel_qualifiers)}]" if sel_qualifiers else ""
-rel_label = " (Assistências)" if use_related else ""
-
-base_label = f"{type_label}{qual_label}{out_label}{rel_label}{team_label}{player_label}"
-
-
-if len(base_label) > 50:
-    base_label = base_label[:47] + "..."
-
-# 4.4 Calc P90/Total
-if normalization_mode == "Por Jogo" or normalization_mode == "Por Jogo (Média)": # Handle label change
-    df_agg["display_metric"] = (df_agg[base_col] / df_agg["matches"]).fillna(0)
-    metric_label = f"{base_label} por Jogo"
-    text_format = ".2f"
-else: # Totals
-    df_agg["display_metric"] = df_agg[base_col]
-    metric_label = f"Total de {base_label}"
-    text_format = ".0f"
-
-metric_col = "display_metric"
+else:
+    # Standard Logic
+    base_col = "metric_count"
+    
+    # Construct label from selections
+    type_label = ", ".join(sel_types) if sel_types else "Todos Eventos"
+    team_label = f" ({', '.join(sel_teams)})" if sel_teams else "" 
+    player_label = f" ({', '.join(sel_players)})" if sel_players else ""
+    out_label = f" ({', '.join(sel_outcomes)})" if sel_outcomes else ""
+    qual_label = f" [{', '.join(sel_qualifiers)}]" if sel_qualifiers else ""
+    rel_label = " (Assistências)" if use_related else ""
+    
+    base_label = f"{type_label}{qual_label}{out_label}{rel_label}{team_label}{player_label}"
+    
+    if len(base_label) > 50:
+        base_label = base_label[:47] + "..."
+    
+    if normalization_mode == "Por Jogo":
+        df_agg["display_metric"] = (df_agg[base_col] / df_agg["matches"]).fillna(0)
+        metric_label = f"{base_label} / Jogo"
+        text_format = ".2f"
+    else:
+        df_agg["display_metric"] = df_agg[base_col]
+        metric_label = f"Total {base_label}"
+        text_format = ".0f"
+    
+    metric_col = "display_metric"
 
 
 # --- 5. VISUALIZATION ---

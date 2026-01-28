@@ -603,12 +603,191 @@ def get_dynamic_ranking_query(
     
     {filtered_events_block}
     
+
     SELECT
         p.*,
         m.start_time as match_date,
         m.season
     FROM filtered_events p
     JOIN match_metadata m ON {join_on}
+    """
+
+
+def get_conversion_ranking_query(
+    project_id: str, 
+    dataset_id: str, 
+    subject: str, # 'Equipes' or 'Jogadores'
+    
+    # Numerator Params
+    num_event_types: object,
+    num_outcomes: object,
+    num_qualifiers: object,
+    
+    # Denominator Params
+    den_event_types: object,
+    den_outcomes: object,
+    den_qualifiers: object,
+    
+    teams: object = None,
+    players: object = None
+) -> str:
+    """
+    Constructs a ranking query for Efficiency/Conversion.
+    Returns: game_id, team/player, numerator_count, denominator_count, ratio
+    """
+    # Reuse the logic builders from get_dynamic_ranking_query but applied twice
+    # We essentially need to generate the CTEs for both, then join.
+    
+    # Refactor proposal: 
+    # To avoid massive code duplication, we can extract the CTE generation logic.
+    # But for now, to be safe and robust, I will reimplement the CTE generation here 
+    # or call a helper if I extract it.
+    # Given the complexity of "Effective Team" logic, it's better to extract it.
+    # checking file structure... _build_enhanced_events is not a separate function yet.
+    # I will inline it for now to ensure correctness, as extracting might be risky without tests.
+    
+    schedule_union = _build_schedule_union(project_id, dataset_id)
+    events_union = _build_events_union(project_id, dataset_id)
+    
+    def _build_filter_where(etypes, outcomes, quals, teams, players):
+        where_clauses = ["1=1"]
+        # 1. Event Type
+        if etypes and "Todos" not in etypes:
+            if isinstance(etypes, list):
+                 types_str = "', '".join(etypes)
+                 where_clauses.append(f"type IN ('{types_str}')")
+            else:
+                 where_clauses.append(f"type = '{etypes}'")
+        
+        # 2. Outcome
+        if outcomes and "Todos" not in outcomes:
+            target_outcomes = []
+            if isinstance(outcomes, str): outcomes = [outcomes]
+            for out in outcomes:
+                if out == "Sucesso": target_outcomes.append("Successful")
+                elif out == "Falha": target_outcomes.append("Unsuccessful")
+                else: target_outcomes.append(out)
+            if target_outcomes:
+                out_str = "', '".join(target_outcomes)
+                where_clauses.append(f"outcome_type IN ('{out_str}')")
+
+        # 3. Qualifiers
+        if quals and "Todos (Qualquer)" not in quals:
+            if isinstance(quals, str): quals = [quals]
+            safe_quals = [re.escape(q) for q in quals if q]
+            if safe_quals:
+                pattern = "|".join(safe_quals)
+                where_clauses.append(f"REGEXP_CONTAINS(qualifiers, r'{pattern}')")
+        
+        # 4. Teams (Applied on effective_team later)
+        team_clause = None
+        if teams and "Todos" not in teams:
+            if isinstance(teams, list):
+                 teams_str = "', '".join(teams)
+                 team_clause = f"effective_team IN ('{teams_str}')"
+            else:
+                 team_clause = f"effective_team = '{teams}'"
+
+        # 5. Players
+        if players and "Todos" not in players:
+            if isinstance(players, list):
+                 players_str = "', '".join(players)
+                 where_clauses.append(f"player IN ('{players_str}')")
+            else:
+                 where_clauses.append(f"player = '{players}'")
+
+        base_where = " AND ".join(where_clauses)
+        if team_clause:
+            base_where += f" AND {team_clause}"
+            
+        return base_where
+
+    # Build Where clauses
+    where_num = _build_filter_where(num_event_types, num_outcomes, num_qualifiers, teams, players)
+    where_den = _build_filter_where(den_event_types, den_outcomes, den_qualifiers, teams, players)
+    
+    # Grouping Config
+    if subject == "Jogadores":
+        group_cols = "game_id, player, team"
+        select_cols = "game_id, player, team"
+        join_on = "p.game_id = m.game_id"
+        base_where_sql = "player IS NOT NULL"
+    else:
+        # Equipes
+        group_cols = "game_id, team" # effectively effective_team aliased
+        select_cols = "game_id, effective_team as team"
+        join_on = "p.game_id = m.game_id"
+        base_where_sql = "team IS NOT NULL" # targets effective_team
+
+    
+    return f"""
+    WITH all_schedule AS (
+        {schedule_union}
+    ),
+    all_events AS (
+        {events_union}
+    ),
+    match_metadata AS (
+        SELECT game_id, match_date as start_time, season, home_team, away_team
+        FROM all_schedule
+    ),
+    events_enhanced AS (
+        SELECT 
+            e.*,
+            -- Calculate Effective Team (Fix for Own Goals)
+            CASE 
+                WHEN e.type = 'Goal' AND REGEXP_CONTAINS(e.qualifiers, r'OwnGoal') THEN
+                    CASE 
+                        WHEN e.team = m.home_team THEN m.away_team 
+                        WHEN e.team = m.away_team THEN m.home_team 
+                        ELSE e.team
+                    END
+                ELSE e.team
+            END as effective_team
+        FROM all_events e
+        JOIN match_metadata m ON e.game_id = m.game_id
+    ),
+    
+    cte_numerator AS (
+        SELECT
+            {select_cols},
+            COUNT(*) as num_count
+        FROM events_enhanced
+        WHERE {base_where_sql.replace('team', 'effective_team')} 
+        AND {where_num}
+        GROUP BY {group_cols.replace('team', 'effective_team')}
+    ),
+    
+    cte_denominator AS (
+        SELECT
+             {select_cols},
+            COUNT(*) as den_count
+        FROM events_enhanced
+        WHERE {base_where_sql.replace('team', 'effective_team')} 
+        AND {where_den}
+        GROUP BY {group_cols.replace('team', 'effective_team')}
+    )
+    
+    SELECT
+        COALESCE(n.game_id, d.game_id) as game_id,
+        COALESCE(n.team, d.team) as team,
+        { "COALESCE(n.player, d.player) as player," if subject == "Jogadores" else "" }
+        
+        m.start_time as match_date,
+        m.season,
+        
+        COALESCE(n.num_count, 0) as numerator,
+        COALESCE(d.den_count, 0) as denominator,
+        
+        SAFE_DIVIDE(COALESCE(n.num_count, 0), COALESCE(d.den_count, 0)) as ratio
+        
+    FROM cte_numerator n
+    FULL OUTER JOIN cte_denominator d 
+        ON n.game_id = d.game_id 
+        AND n.team = d.team
+        { "AND n.player = d.player" if subject == "Jogadores" else "" }
+        
+    JOIN match_metadata m ON COALESCE(n.game_id, d.game_id) = m.game_id
     """
 
 
