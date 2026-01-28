@@ -11,7 +11,8 @@ from datetime import datetime, timedelta
 
 from src.css import load_css
 from src.bq_io import get_bq_client
-from src.queries import get_match_stats_query, get_player_rankings_query, get_dynamic_ranking_query, get_all_teams_query
+from src.queries import get_match_stats_query, get_player_rankings_query, get_dynamic_ranking_query, get_all_teams_query, get_all_players_query
+
 
 
 st.set_page_config(page_title="Rankings Gerais", page_icon="📊", layout="wide")
@@ -23,10 +24,7 @@ PROJECT_ID = "betterbet-467621"
 DATASET_ID = "betterdata"
 
 
-# --- 1. CONFIGURATION & SIDEBAR ---
-st.divider()
-
-# --- 2. CONFIGURATION & SIDEBAR ---
+# --- 1. MAIN CONFIGURATION ---
 col_filter_1, col_filter_2, col_filter_3, col_filter_4 = st.columns(4)
 
 with col_filter_1:
@@ -36,20 +34,20 @@ with col_filter_2:
     aggregation_mode = st.radio("Agrupamento:", ["Por Temporada", "Histórico"], index=0, horizontal=True)
 
 with col_filter_3:
-    # Date Filter (Removed duplicate; see below)
     st.info("Filtro de Periodo carregado dinamicamente abaixo.")
-
 
 with col_filter_4:
     top_n = st.number_input("Top N:", 1, 100, 10)
     normalization_mode = st.radio("Visualizar:", ["Total", "Por Jogo"], index=0, horizontal=True, label_visibility="collapsed")
 
 st.divider()
-st.markdown("##### 🛠️ Configurar Filtros")
 
-col_c1, col_c2, col_c3, col_c4 = st.columns([1.5, 1.5, 2, 0.5]) # Adjusted Ratios
+# --- 2. SCOPE FILTERS (Hierarchical) ---
+# Filter first by Team, then by Player (if applicable)
 
-# Lists for filtering (Load Teams first)
+col_scope_1, col_scope_2 = st.columns(2)
+
+# Load Teams
 @st.cache_data(ttl=3600)
 def load_team_list():
     client = get_bq_client(project=PROJECT_ID)
@@ -59,13 +57,43 @@ def load_team_list():
 
 ALL_TEAMS = load_team_list()
 
+# Load Players (Dynamic based on team selection)
+@st.cache_data(ttl=300)
+def load_player_list(selected_teams=None):
+    client = get_bq_client(project=PROJECT_ID)
+    teams_param = selected_teams if selected_teams else None
+    q = get_all_players_query(PROJECT_ID, DATASET_ID, teams_param)
+    df = client.query(q).to_dataframe()
+    return df["player"].unique().tolist() 
+
+with col_scope_1:
+    sel_teams = st.multiselect("Filtrar Equipes (Opcional)", ALL_TEAMS, default=[], help="Deixe vazio para ver todas.")
+
+with col_scope_2:
+    sel_players = []
+    if subject == "Jogadores":
+        # Hierarchical: Filter players by selected teams
+        available_players = load_player_list(sel_teams)
+        sel_players = st.multiselect("Filtrar Jogadores (Opcional)", available_players, default=[], help="Deixe vazio para ver todos.")
+    else:
+        st.write("") 
+
+st.divider()
+
+st.markdown("##### 🛠️ Configurar Filtros")
+
+# Lists for filtering
+# (Team loader moved to top)
+
 EVENT_TYPES = ["Pass", "Shot", "Ball Recovery", "Tackle", "Interception", "Foul", "Save", "Goal", "Clearance", "TakeOn", "Aerial", "Error", "Challenge", "Dispossessed"]
+
 OUTCOMES = ["Sucesso", "Falha"]
 QUALIFIERS = ["KeyPass", "Assisted", "BigChanceCreated", "LeadingToGoal", "LeadingToAttempt", "Head", "Cross", "Corner", "FreeKick", "Penalty", "Throughball", "Longball", "Chipped", "LayOff", "Volley", "OwnGoal", "Red", "Yellow"]
 
 with col_c1:
-    sel_teams = st.multiselect("Equipes (Opcional)", ALL_TEAMS, default=[])
+    # Team Selection moved up
     sel_types = st.multiselect("Tipos de Evento", EVENT_TYPES, default=["Goal"])
+
 
 
 with col_c2:
@@ -115,13 +143,14 @@ with col_c4:
 
 @st.cache_data(ttl=300) 
 @st.cache_data(ttl=300) 
-def load_dynamic_data(subj, etypes, outs, quals, use_related_player=False, teams=None):
+def load_dynamic_data(subj, etypes, outs, quals, use_related_player=False, teams=None, players=None):
     client = get_bq_client(project=PROJECT_ID)
     # Convert empty lists to "Todos" equivalents effectively handled by query logic or passed as empty list
     # Query logic handles list checks.
     
-    query = get_dynamic_ranking_query(PROJECT_ID, DATASET_ID, subj, etypes, outs, quals, use_related_player, teams)
+    query = get_dynamic_ranking_query(PROJECT_ID, DATASET_ID, subj, etypes, outs, quals, use_related_player, teams, players)
     df = client.query(query).to_dataframe()
+
     if "match_date" in df.columns:
         df["match_date"] = pd.to_datetime(df["match_date"]).dt.date
     return df
@@ -138,10 +167,12 @@ try:
         st.info("Selecione pelo menos um filtro acima.")
         st.stop()
     
-    # Pass teams
+    # Pass teams and players
     q_teams = sel_teams if sel_teams else None
+    q_players = sel_players if sel_players else None
         
-    df_raw = load_dynamic_data(subject, q_types, q_outcomes, q_qualifiers, use_related, q_teams)
+    df_raw = load_dynamic_data(subject, q_types, q_outcomes, q_qualifiers, use_related, q_teams, q_players)
+
 
     
 except Exception as e:
@@ -282,12 +313,14 @@ base_col = "metric_count"
 # Construct label from selections
 type_label = ", ".join(sel_types) if sel_types else "Todos Eventos"
 team_label = f" ({', '.join(sel_teams)})" if sel_teams else "" 
+player_label = f" ({', '.join(sel_players)})" if sel_players else ""
 out_label = f" ({', '.join(sel_outcomes)})" if sel_outcomes else ""
 
 qual_label = f" [{', '.join(sel_qualifiers)}]" if sel_qualifiers else ""
 rel_label = " (Assistências)" if use_related else ""
 
-base_label = f"{type_label}{qual_label}{out_label}{rel_label}{team_label}"
+base_label = f"{type_label}{qual_label}{out_label}{rel_label}{team_label}{player_label}"
+
 
 if len(base_label) > 50:
     base_label = base_label[:47] + "..."
