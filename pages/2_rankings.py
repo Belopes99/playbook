@@ -90,7 +90,11 @@ EVENT_TYPES = ["Pass", "Shot", "Ball Recovery", "Tackle", "Interception", "Foul"
 OUTCOMES = ["Sucesso", "Falha"]
 QUALIFIERS = ["KeyPass", "Assisted", "BigChanceCreated", "LeadingToGoal", "LeadingToAttempt", "Head", "Cross", "Corner", "FreeKick", "Penalty", "Throughball", "Longball", "Chipped", "LayOff", "Volley", "OwnGoal", "Red", "Yellow"]
 
+
+col_c1, col_c2, col_c3, col_c4 = st.columns([1.5, 1.5, 2, 0.5])
+
 with col_c1:
+
     # Team Selection moved up
     sel_types = st.multiselect("Tipos de Evento", EVENT_TYPES, default=["Goal"])
 
