@@ -15,10 +15,11 @@ from src.queries import get_match_stats_query, get_player_rankings_query, get_dy
 
 
 
-st.set_page_config(page_title="Rankings Gerais", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Rankings Pró (A Favor)", page_icon="📈", layout="wide")
 load_css()
 
-st.title("📊 Rankings Gerais")
+st.title("📈 Rankings Pró (A Favor)")
+
 
 PROJECT_ID = "betterbet-467621"
 DATASET_ID = "betterdata"
@@ -177,20 +178,20 @@ else:
 # Dynamic Loader
 
 @st.cache_data(ttl=300) 
-@st.cache_data(ttl=300)
 def load_dynamic_data(subj, etypes, outs, quals, use_rel, teams, players, a_type, d_types=None, d_outs=None, d_quals=None):
     client = get_bq_client(project=PROJECT_ID)
     
     if a_type == "Volume Total":
-        query = get_dynamic_ranking_query(PROJECT_ID, DATASET_ID, subj, etypes, outs, quals, use_rel, teams, players)
+        query = get_dynamic_ranking_query(PROJECT_ID, DATASET_ID, subj, etypes, outs, quals, use_rel, teams, players, perspective="pro")
     else:
         # Conversion
         query = get_conversion_ranking_query(
             PROJECT_ID, DATASET_ID, subj,
             etypes, outs, quals,
             d_types, d_outs, d_quals,
-            teams, players
+            teams, players, perspective="pro"
         )
+
 
     df = client.query(query).to_dataframe()
 
